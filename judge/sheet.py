@@ -131,6 +131,32 @@ def build(rows: list[dict], out: Path) -> Path:
     dv(f"_选项!$B$1:$B${len(OPT_MISS)}", miss_col)
     dv(f"_选项!$C$1:$C${len(OPT_CODES)}", miss_col + 1, strict=False)
 
+    # 路由业务规则：模型 system prompt 里按路由固定的口径，同一路由一份，按 route_case 查
+    seen: dict[str, str] = {}
+    for r in rows:
+        rc, ru = str(r.get("route_case") or ""), str(r.get("rules") or "")
+        if ru and rc not in seen:
+            seen[rc] = ru
+    if seen:
+        rs = wb.create_sheet("路由业务规则")
+        rs.append(["route_case", "字数", "规则原文（模型每轮都看得到；核 T1/T5 时对着查）"])
+        for rc, ru in sorted(seen.items()):
+            rs.append([rc, len(ru), ru[:32000]])
+        for c in range(1, 4):
+            cell = rs.cell(row=1, column=c)
+            cell.font = Font(name=FONT, size=10, bold=True, color="FFFFFF")
+            cell.fill = HEAD_FILL
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        for row in rs.iter_rows(min_row=2, max_row=rs.max_row, max_col=3):
+            for cell in row:
+                cell.font = Font(name=FONT, size=9)
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+            rs.row_dimensions[row[0].row].height = 400
+        rs.column_dimensions["A"].width = 22
+        rs.column_dimensions["B"].width = 8
+        rs.column_dimensions["C"].width = 150
+        rs.freeze_panes = "A2"
+
     # 判据表：核漏判时对着看
     rf = wb.create_sheet("判据表")
     rf.append(["判据", "主题", "名称", "什么算命中", "前提（条件型才有）", "做对的样子", "权重"])
