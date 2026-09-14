@@ -87,7 +87,7 @@ def main() -> int:
     sysp, _ = prompts.build(groups("one")[0], ctx)
     ck("分档字段进了 prompt", "fact_type" in sysp and "claim_type" in sysp)
     sysp, usr = prompts.build([t for t in THEMES if t.key == "fact"][0], {**ctx, "truth": ""})
-    ck("缺权威口径时 prompt 明说填 null", "hit=null" in usr)
+    ck("缺人工口径时 prompt 明说 T1 改用召回切片", "以<本轮证据>为口径" in usr)
 
     print("\n[解析]")
     g = '{"verdicts":[{"code":"neg_2_1","hit":true,"quote":"x","why":"y"}]}'

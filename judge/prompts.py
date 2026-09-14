@@ -95,9 +95,9 @@ def build(themes, ctx: dict) -> tuple[str, str]:
         u.append(f"<原始问题>\n{ctx['query']}\n</原始问题>")
     if NEEDS_ANSWER in theme.needs:
         u.append(f"<回答>\n{ctx['answer']}\n</回答>")
-    if NEEDS_TRUTH in theme.needs:
+    if NEEDS_TRUTH in theme.needs or any(th.key == "fact" for th in themes):
         tr = (ctx.get("truth") or "").strip()
-        u.append(f"<权威口径>\n{tr or '（没有提供 —— 需要权威口径的判据一律填 hit=null）'}\n</权威口径>")
+        u.append(f"<权威口径>\n{tr or '（没有人工口径 —— T1 以<本轮证据>为口径）'}\n</权威口径>")
     if NEEDS_EVIDENCE in theme.needs:
         ev = (ctx.get("evidence") or "").strip()
         u.append(f"<本轮证据>\n{ev or '（本轮一条切片都没召回）'}\n</本轮证据>")

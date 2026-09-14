@@ -36,15 +36,6 @@ def load_config() -> None:
                 os.environ.setdefault(k.strip(), v.strip())
 
 
-def active_themes(a):
-    """--no-truth：把需要权威口径的主题整个摘掉，而不是让它逐条「无法判定」。
-    口径统一 —— 每条 case 判的判据一样多，一致率才可比。"""
-    from rubric import NEEDS_TRUTH, THEMES
-    if getattr(a, "no_truth", False):
-        return tuple(th for th in THEMES if NEEDS_TRUTH not in th.needs)
-    return THEMES
-
-
 def _load(a) -> tuple[list[dict], dict]:
     import adapters
     turns = [t for t in adapters.load(a.source, a.run) if adapters.ok(t)]
@@ -67,7 +58,7 @@ def cmd_run(a) -> int:
     import llm, pipeline, report, sheet
     from rubric import groups
     turns, truth = _load(a)
-    themes = active_themes(a)
+    from rubric import THEMES as themes
     grps = groups(a.group, themes)
     client = llm.get_client(a.llm)
     out_dir = Path(a.out or ROOT / "data/runs" / Path(a.run).name)
@@ -76,7 +67,7 @@ def cmd_run(a) -> int:
     print(f"judge: {len(turns)} 轮 × {len(grps)} 组（--group {a.group}）= "
           f"约 {len(turns) * len(grps)} 次调用，模型 {client.name}，"
           f"判据 {n_tips} 条，权威口径 "
-          f"{'关闭（--no-truth，不判 T1）' if getattr(a, 'no_truth', False) else str(len(truth)) + ' 条'}")
+          f"{'不用（--no-truth，T1 以召回切片为口径）' if getattr(a, 'no_truth', False) else str(len(truth)) + ' 条'}")
     t0 = time.perf_counter()
     rows, cache = pipeline.run(
         turns, client, truth, grps, workers=a.workers,
@@ -152,7 +143,7 @@ def main() -> int:
                             "theme 一主题一次，调 prompt 时用")
         p.add_argument("--evidence-chars", type=int, default=4000)
         p.add_argument("--no-truth", action="store_true",
-                       help="没有权威口径：整个摘掉 T1，只判其余 4 主题 13 条判据")
+                       help="不读 truth.jsonl；T1 改以召回切片为口径，14 条判据照判")
 
     p = sub.add_parser("run"); add_run_args(p)
     p.add_argument("--llm", default="auto", choices=("auto", "mock", "dify", "openai"))

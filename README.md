@@ -19,9 +19,9 @@ python3 cli.py run data/in/shane-fx-0908 --no-truth    # 判 94 轮，出 judge.
 结果在 `data/runs/shane-fx-0908/`，提交回仓库就能在别的机器上拉到。
 `复核表.xlsx` 是发给标注的那张：一行一 case，只列命中的判据，人标「判对了吗」和「有没有漏判」。
 
-`--no-truth` 是现在的常态：judge 先出结果再送人复核，不依赖权威口径，T1 整个摘掉，
-每条判其余 4 主题 13 条判据。`data/labels/truth.jsonl` 是上一批标注留下的，只覆盖那 100 条，
-不加 `--no-truth` 才会用到。
+`--no-truth` 是现在的常态：judge 先出结果再送人复核，不依赖 GT。T1 改以召回切片为口径 ——
+回答里的平台事实跟切片相悖才算命中，切片里没提的归 neg_5_1。14 条判据每条都判。
+`data/labels/truth.jsonl` 是上一批标注留下的人工口径，只覆盖那 100 条，不加 `--no-truth` 时优先用它。
 
 其他数据源：`bench/runs/<run_id>` 目录（要有 `turns.jsonl`）或对齐了字段的 jsonl（`--source jsonl`）。
 再多一种 = 在 `judge/adapters.py` 加一个 loader。
@@ -32,7 +32,7 @@ python3 cli.py run data/in/shane-fx-0908 --no-truth    # 判 94 轮，出 judge.
 外加 11 条规则（7 条契约卡点 · 3 条计分 · 1 条簇级），不调模型。
 
 ```
-T1 事实与权威口径冲突   needs query answer truth       1 条
+T1 事实与口径冲突       needs query answer evidence      1 条
 T2 切题与完整性        needs query answer             5 条
 T3 个人账户类问题缺取证  needs query answer signals      1 条
 T4 角色与话术越界       needs query answer             4 条
@@ -47,7 +47,7 @@ T5 证据使用           needs query answer evidence signals  3 条
 v1 里 `neg_3_1 + neg_3_2` 这类对子几乎总一起亮，一个行为被记两次就从「需修改」跳到「不可上线」。
 
 **判据放在它需要的材料那一组。** `needs` 既决定 bundle 分组，也决定缺材料时不判 ——
-没有权威口径时 T1 输出「无法判定」，不退化成拿证据当口径。
+T1 的口径是人工口径优先、召回切片兜底，两样都没有才输出「无法判定」。
 
 **正向不另判。** 带 `applies_when` 的判据多输出一个 `applies`（前提是否成立），
 做对 = 前提成立且未命中，直接得到澄清率、取证率、兜底率这类比率。

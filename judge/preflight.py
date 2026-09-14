@@ -7,7 +7,7 @@ import llm as _llm
 import prompts
 from context import build_ctx, missing_materials
 from pipeline import parse_verdicts, verify_quotes
-from rubric import NEEDS_TRUTH, THEMES, TIP_BY_CODE, group_label, groups
+from rubric import THEMES, TIP_BY_CODE, group_label, groups
 from score import score
 from scorers import objective
 
@@ -36,8 +36,7 @@ def run(turns: list[dict], truth: dict, a) -> int:
     chk("工具记录字段", True,
         f"{len(turns) - no_tool}/{len(turns)} 轮有 —— 没有时 R9/R10 不触发，neg_3_1 以 LLM 为主")
 
-    themes = (tuple(th for th in THEMES if NEEDS_TRUTH not in th.needs)
-              if getattr(a, "no_truth", False) else THEMES)
+    themes = THEMES
     grps = groups(a.group, themes)
     chk(f"判据分组（--group {a.group}）", True,
         f"{len(grps)} 组：" + " | ".join(group_label(g) for g in grps))
@@ -101,15 +100,15 @@ def run(turns: list[dict], truth: dict, a) -> int:
         score([], undecidable=["fact"])["verdict"] == "判定不完整")
 
     if getattr(a, "no_truth", False):
-        print("  OK   权威口径　已关（--no-truth）：T1 整个摘掉，每条都判 "
-              f"{sum(len(th.tips) for th in themes)} 条判据，口径一致")
+        print("  OK   权威口径　不读（--no-truth）：T1 以召回切片为口径，14 条判据照判，"
+              "无召回的轮次 T1/T5 一起不判")
     else:
         have_truth = sum(1 for t in turns if str(t.get("case_id")) in truth)
         chk("权威口径覆盖", True,
             f"{have_truth}/{len(turns)} 轮 —— 其余轮 T1 输出「无法判定」，不算 0 分")
     no_ev = sum(1 for t in turns
                 if "evidence" in missing_materials(build_ctx(t, truth, a.evidence_chars)))
-    chk("证据覆盖", True, f"{len(turns) - no_ev}/{len(turns)} 轮有召回 —— 其余轮 T5 不判")
+    chk("证据覆盖", True, f"{len(turns) - no_ev}/{len(turns)} 轮有召回 —— 其余轮 T1/T5 不判")
 
     n_calls = len(turns) * len(grps)
     print(f"\n  接上模型后：约 {n_calls} 次调用（{len(turns)} 轮 × {len(grps)} 组），"

@@ -70,17 +70,18 @@ class Theme:
 
 
 THEMES: tuple[Theme, ...] = (
-    Theme("fact", "T1", "事实与权威口径冲突",
-          (NEEDS_QUERY, NEEDS_ANSWER, NEEDS_TRUTH),
-          hint="只判「说错了」，不判「没答到点上」。没有权威口径时本主题输出「无法判定」，"
-               "不退化为与召回证据比对 —— 那是 T5 的事。",
+    Theme("fact", "T1", "事实与口径冲突",
+          (NEEDS_QUERY, NEEDS_ANSWER, NEEDS_EVIDENCE),
+          hint="只判「说错了」，不判「没答到点上」。口径来源：有<权威口径>先以它为准，"
+               "没有就以<本轮证据>里的切片为口径。只判「与口径相悖」，"
+               "不判「口径里没提」—— 那是 neg_5_1 无据强答。两边都没有可对的事实就填 hit=null。",
           tips=(
-              Tip("neg_1_1", "与权威口径冲突",
-                  "回答里的平台特定事实与人工确认的正确说法相反，用户照着做会做错",
+              Tip("neg_1_1", "与口径冲突",
+                  "回答里的平台特定事实与口径（人工确认的正确说法，或召回切片）相反，用户照着做会做错",
                   HARD_FAIL, 31, 1.00,
                   type_field="fact_type",
                   type_options=("入口/功能存在性", "规则结论", "数值/费率/时限", "账户事实"),
-                  applies_when="权威口径表明所问功能不存在或已下线",
+                  applies_when="口径表明所问功能不存在或已下线",
                   right_looks_like="直说没有或已下线，不给任何入口",
                   ratio="拒编率", bonus=0.6,
                   note="合并 v1 neg_1_1/1_2/1_3：同为 hard_fail，只是错的事实种类不同"),
