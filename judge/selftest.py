@@ -16,6 +16,20 @@ from scorers import objective
 FAILS: list[str] = []
 
 
+def _load_config() -> None:
+    """凭证状态那行要准，就得先读 config.env。"""
+    import os
+    from pathlib import Path
+    cfg = Path(__file__).resolve().parent.parent / "config.env"
+    if not cfg.exists():
+        return
+    for line in cfg.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
+
 def ck(name, cond, detail=""):
     if not cond:
         FAILS.append(name)
@@ -23,6 +37,7 @@ def ck(name, cond, detail=""):
 
 
 def main() -> int:
+    _load_config()
     print("deepcoin-judge 自检\n")
 
     print("[判据表]")

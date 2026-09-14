@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """deepcoin-judge 命令行。
 
+    python3 cli.py probe                            一次真调用，验端点与 JSON mode
     python3 cli.py check   <run>                    预检，不发请求
     python3 cli.py run     <run> [--llm auto]       判一遍
     python3 cli.py agree   <judge.jsonl> <labels>   人机一致率
@@ -97,6 +98,12 @@ def cmd_truth(a) -> int:
     return make_truth.main(a.labels, a.out or ROOT / "data/labels/truth.jsonl")
 
 
+def cmd_probe(a) -> int:
+    load_config()
+    import probe
+    return probe.run()
+
+
 def cmd_rubric(a) -> int:
     import rubric
     print(rubric.summary())
@@ -143,6 +150,7 @@ def main() -> int:
     p.add_argument("-o", "--out", type=Path, default=None)
     p.set_defaults(fn=cmd_truth)
 
+    sub.add_parser("probe").set_defaults(fn=cmd_probe)
     sub.add_parser("rubric").set_defaults(fn=cmd_rubric)
     sub.add_parser("selftest").set_defaults(fn=cmd_selftest)
 
