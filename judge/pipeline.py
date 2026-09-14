@@ -55,39 +55,66 @@ class Cache:
                 f.write(json.dumps({"k": k, "raw": raw}, ensure_ascii=False) + "\n")
 
 
+VERDICT_OBJ = re.compile(r"\{[^{}]*?\"code\"\s*:\s*\"(neg_\d_\d)\"[^{}]*\}", re.S)
+
+
+def _norm(v: dict) -> dict | None:
+    c = str(v.get("code") or "")
+    tip = TIP_BY_CODE.get(c)
+    if tip is None:
+        return None
+    rec = {"code": c, "hit": v.get("hit") if v.get("hit") in (True, False) else None,
+           "quote": str(v.get("quote") or "")[:200],
+           "why": str(v.get("why") or "")[:300]}
+    if tip.conditional:
+        rec["applies"] = v.get("applies") if v.get("applies") in (True, False) else None
+    if tip.type_field and rec["hit"]:
+        rec[tip.type_field] = str(v.get(tip.type_field) or "")
+    return rec
+
+
 def parse_verdicts(raw: str, codes: list[str]) -> tuple[list[dict], str]:
+    """返回 (verdicts, err)。err 为空 = 齐全。
+    整体 JSON 坏了（多半是被 max_tokens 截断）就逐个对象救，能救几条算几条 ——
+    err 里写明「截断，救回 n/m」，调用方决定重试还是接受。"""
     txt = (raw or "").strip()
     if txt.startswith("```"):
         txt = re.sub(r"^```[a-z]*\n|\n```$", "", txt)
-    m = re.search(r"\{.*\}", txt, re.S)
-    if not m:
-        return [], "没找到 JSON"
-    try:
-        obj = json.loads(m.group(0))
-    except json.JSONDecodeError as exc:
-        return [], f"JSON 解析失败：{exc.msg}"
-    vs = obj.get("verdicts")
-    if not isinstance(vs, list):
-        return [], "没有 verdicts 数组"
     out, seen = [], set()
-    for v in vs:
-        if not isinstance(v, dict):
-            continue
-        c = str(v.get("code") or "")
-        tip = TIP_BY_CODE.get(c)
-        if tip is None or c in seen:
-            continue
-        seen.add(c)
-        rec = {"code": c, "hit": v.get("hit") if v.get("hit") in (True, False) else None,
-               "quote": str(v.get("quote") or "")[:200],
-               "why": str(v.get("why") or "")[:300]}
-        if tip.conditional:
-            rec["applies"] = v.get("applies") if v.get("applies") in (True, False) else None
-        if tip.type_field and rec["hit"]:
-            rec[tip.type_field] = str(v.get(tip.type_field) or "")
-        out.append(rec)
+    m = re.search(r"\{.*\}", txt, re.S)
+    whole_ok = False
+    if m:
+        try:
+            obj = json.loads(m.group(0))
+            vs = obj.get("verdicts") if isinstance(obj, dict) else None
+            if isinstance(vs, list):
+                whole_ok = True
+                for v in vs:
+                    if isinstance(v, dict):
+                        rec = _norm(v)
+                        if rec and rec["code"] not in seen:
+                            seen.add(rec["code"])
+                            out.append(rec)
+        except json.JSONDecodeError:
+            pass
+    if not whole_ok:
+        for mm in VERDICT_OBJ.finditer(txt):
+            try:
+                rec = _norm(json.loads(mm.group(0)))
+            except json.JSONDecodeError:
+                continue
+            if rec and rec["code"] not in seen:
+                seen.add(rec["code"])
+                out.append(rec)
     missing = [c for c in codes if c not in seen]
-    return out, (f"判据缺失：{'、'.join(missing)}" if missing else "")
+    if not txt:
+        return [], "空回复（思考模型把 max_tokens 全花在思考上，content 为空）"
+    if not out:
+        return [], "没找到 JSON"
+    if missing:
+        how = "截断" if not whole_ok else "漏判"
+        return out, f"{how}，救回 {len(out)}/{len(codes)}，缺 {'、'.join(missing)}"
+    return out, ""
 
 
 def verify_quotes(verdicts: list[dict], answer: str) -> list[str]:
@@ -116,6 +143,8 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
 
     verdicts: list[dict] = []
     errs, done, failed, undecidable = [], [], [], []
+    unjudged: list[str] = []          # 救回部分结果时没判到的判据
+    thinking_notes: list[str] = []
     calls = pt = ct = 0
     t0 = time.perf_counter()
 
@@ -132,6 +161,7 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
         gk, glabel = group_key(grp), group_label(grp)
         k = Cache.key(cid, gk, system, user)
         raw, vs, err = cache.get(k), [], "缓存里没有"
+        best: tuple[list[dict], str] = ([], "")
         for attempt in range(retries + 1):
             if raw is None:
                 try:
@@ -139,6 +169,10 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
                     calls += 1
                     pt += getattr(usage, "prompt_tokens", 0) or 0
                     ct += getattr(usage, "completion_tokens", 0) or 0
+                    fr = getattr(usage, "finish_reason", "")
+                    rc = getattr(usage, "reasoning_chars", 0)
+                    if fr == "length" or rc:
+                        thinking_notes.append(f"finish={fr or '?'} 思考{rc}字")
                 except NotImplementedError as exc:
                     return {"case_id": cid, "fatal": str(exc)}
                 except Exception as exc:
@@ -148,13 +182,26 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
             if not err:
                 cache.put(k, raw)
                 break
+            if len(vs) > len(best[0]):
+                best = (vs, err)
             if raw is not None and cache.path is not None:
                 fdir = cache.path.parent / "failed"
                 fdir.mkdir(exist_ok=True)
                 (fdir / f"{cid.replace(':', '_')}.{attempt}.txt").write_text(
                     f"# {err}\n\n{raw}", encoding="utf-8")
             raw = None
-        if err:
+        if err and best[0]:
+            # 重试后还是不齐：接受救回来的，缺的标 null。一条判据没判不该让整轮作废。
+            vs, err = best
+            have = {v["code"] for v in vs}
+            for c in codes:
+                if c not in have:
+                    vs.append({"code": c, "hit": None, "quote": "",
+                               "why": "[未判] 模型输出截断或漏判"})
+                    unjudged.append(c)
+            errs.append(f"[{glabel}] {err}（已接受部分结果）")
+            done.append(gk)
+        elif err:
             errs.append(f"[{glabel}] {err}")
             failed.append(gk)
         else:
@@ -171,6 +218,13 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
         sc["verdict"] = "判定不完整"
         sc["reason"] = f"判据组 {'、'.join(failed)} 没判成"
         sc["complete"] = False
+    elif unjudged and sc["verdict"] == "可直接发":
+        # 同「缺材料」的原则：没判到的判据可能藏着问题，不能说干净
+        sc["verdict"] = "判定不完整"
+        sc["reason"] = f"{len(unjudged)} 条判据未判：{'、'.join(unjudged)}"
+        sc["complete"] = False
+    elif unjudged:
+        sc["reason"] += f"（{'、'.join(unjudged)} 未判）"
 
     return {
         "case_id": cid, "suite": turn.get("suite"),
@@ -186,6 +240,8 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
                         for h in rule_hits],
         "verdicts": verdicts,
         "overclaimed": overclaimed,
+        "unjudged": unjudged,
+        "thinking": thinking_notes,
         "judge_errors": errs,
         "groups_done": done, "groups_failed": failed,
         "llm_calls": calls, "prompt_tokens": pt, "completion_tokens": ct,

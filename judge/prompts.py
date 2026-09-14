@@ -92,6 +92,10 @@ def build(themes, ctx: dict) -> tuple[str, str]:
         if t.type_field:
             fields.append(f'"{t.type_field}"（仅 {t.code} 命中时）')
     lines.append("每条 verdict：" + "、".join(fields))
+    lines.append("verdicts 必须且只能包含以下 "
+                 f"{len(body_tips)} 个 code，一个不能少，按此顺序："
+                 + "、".join(t.code for t in body_tips))
+    lines.append("quote 只引最短能定位的片段；why 不超过 40 字。不要输出判据以外的任何内容。")
 
     system = "\n".join(lines).rstrip()
 

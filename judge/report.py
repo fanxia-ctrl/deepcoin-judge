@@ -71,9 +71,15 @@ def write(rows: list[dict], turns: list[dict], out: Path, meta: dict) -> None:
 
     over = sum(len(r.get("overclaimed") or []) for r in rows)
     errs = [e for r in rows for e in r.get("judge_errors", [])]
-    if over or errs:
+    unj = sum(len(r.get("unjudged") or []) for r in rows)
+    think = sum(1 for r in rows if r.get("thinking"))
+    if over or errs or unj:
         L += ["", "## judge 自身的问题", "",
-              f"引用校验翻回 **{over}** 条命中（quote 引不出回答原文）。"]
+              f"引用校验翻回 **{over}** 条命中（quote 引不出回答原文）。",
+              f"输出截断/漏判后救回部分结果的轮次 **{sum(1 for r in rows if r.get('unjudged'))}**，"
+              f"共 **{unj}** 条判据未判（标 null，不计入）。",
+              f"触发 finish=length 或带思考内容的轮次 **{think}** —— 多说明模型在思考，"
+              f"用 `cli.py probe` 试关。"]
         for e, k in Counter(errs).most_common(8):
             L.append(f"- {e}　×{k}")
     out.write_text("\n".join(L) + "\n", encoding="utf-8")

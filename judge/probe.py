@@ -36,54 +36,71 @@ def run() -> int:
         print(exc)
         return 1
 
-    theme = [t for t in THEMES if t.key == "fact"][0]
+    # 用真实的全量 prompt（14 条判据一次判），探活结果才代表全量
+    from rubric import groups
+    grp = groups("one")[0]
     ctx = build_ctx(FAKE, TRUTH)
-    system, user = prompts.build(theme, ctx)
-    codes = [t.code for t in theme.tips]
+    system, user = prompts.build(grp, ctx)
+    codes = [t.code for th in grp for t in th.tips]
 
-    for json_mode in (True, False):
-        if hasattr(client, "json_mode"):
-            client.json_mode = json_mode
-        label = "开 JSON mode" if json_mode else "关 JSON mode"
+    def call(label: str) -> tuple[bool, str, object, int]:
         t0 = time.perf_counter()
         try:
             raw, usage = client.complete(system, user)
         except Exception as exc:
             print(f"  {label}：调用失败 —— {type(exc).__name__}: {exc}")
-            if json_mode:
-                print("     （很可能是这个端点不支持 response_format，继续试关掉的情况）")
-                continue
-            print("\n端点不通或凭证不对。检查 config.env 里的 JUDGE_BASE_URL / JUDGE_API_KEY / JUDGE_MODEL。")
-            return 1
+            return False, "", None, 0
         ms = round((time.perf_counter() - t0) * 1000)
         vs, err = parse_verdicts(raw, codes)
-        ok = not err and len(vs) == len(codes)
+        ok = not err
+        fr = getattr(usage, "finish_reason", "") or "?"
+        rc = getattr(usage, "reasoning_chars", 0)
         print(f"  {label}：{ms}ms　token 入 {usage.prompt_tokens} 出 {usage.completion_tokens}"
-              f"　解析{'成功' if ok else '失败：' + err}")
+              f"　finish={fr}　思考 {rc} 字　解析{'成功' if ok else '失败：' + err}")
         if not ok:
             print(f"     模型原文前 200 字：{raw[:200]!r}")
-        if ok and json_mode:
-            print(f"     判据 {len(vs)} 条：" + "、".join(
-                f"{v['code']}={'命中' if v['hit'] else '未命中'}" for v in vs))
-            print("\n  → 这个端点支持 JSON mode，config.env 保持 JUDGE_JSON_MODE=1")
-            _summary(ms, usage)
-            return 0
-        if ok and not json_mode:
-            print("\n  → 这个端点不支持 JSON mode，但裸输出能解析。"
-                  "把 config.env 的 JUDGE_JSON_MODE 改成 0")
-            _summary(ms, usage)
-            return 0
-    print("\n两种都解析不出来。模型没按 JSON 输出 —— 把上面的原文发我，我调 prompt。")
-    return 1
+        return ok, err, usage, ms
+
+    ok, err, usage, ms = call("开 JSON mode")
+    if not ok and hasattr(client, "json_mode"):
+        print("     （试关掉 JSON mode）")
+        client.json_mode = False
+        ok, err, usage, ms = call("关 JSON mode")
+        if ok:
+            print("\n  → 这个端点不支持 JSON mode，把 config.env 的 JUDGE_JSON_MODE 改成 0")
+    if not ok:
+        print("\n两种都解析不出来。把上面的原文发我。")
+        return 1
+
+    # 思考模型：思考也吃 max_tokens，是截断的根源。试着关掉。
+    rc = getattr(usage, "reasoning_chars", 0)
+    think_ratio = usage.completion_tokens / max(1, len(codes) * 60)   # 14 条判据大约 800 token
+    if (rc or think_ratio > 2.5) and hasattr(client, "extra") and not client.extra:
+        print(f"\n  模型在思考（reasoning {rc} 字，出 token 是判定本身的 {think_ratio:.1f} 倍）。"
+              "试关思考：")
+        for cand in ({"chat_template_kwargs": {"enable_thinking": False}},
+                     {"thinking": {"type": "disabled"}},
+                     {"reasoning": {"enabled": False}}):
+            client.extra = cand
+            ok2, _, u2, ms2 = call(f"    {json.dumps(cand, ensure_ascii=False)}")
+            if ok2 and not getattr(u2, "reasoning_chars", 0) \
+                    and u2.completion_tokens < usage.completion_tokens * 0.7:
+                print(f"\n  → 有效。写进 config.env：\n"
+                      f"     JUDGE_EXTRA_BODY={json.dumps(cand, ensure_ascii=False)}")
+                _summary(ms2, u2)
+                return 0
+        client.extra = {}
+        print("\n  → 三种都没关掉。不影响跑：max_tokens 已放到 8000，截断也会救回已判的条目。")
+    _summary(ms, usage)
+    return 0
 
 
 def _summary(ms: int, usage) -> None:
     per = usage.prompt_tokens + usage.completion_tokens
-    # 默认 --group one：一轮一次调用；探活只发 1 条判据，全量 13 条 prompt 更长，按 4 倍估
-    n, per_full = 94, per * 4
-    print(f"\n  单次约 {ms}ms / {per} token（探活只带 1 条判据）。"
+    n = 94
+    print(f"\n  单次约 {ms}ms / {per} token（已是全量 14 条判据的 prompt）。"
           f"全量 {n} 轮 × 1 组 = {n} 次调用，"
-          f"--workers 4 约 {n * ms * 2 / 4000 / 60:.0f} 分钟，约 {n * per_full / 10000:.0f} 万 token。")
+          f"--workers 4 约 {n * ms / 4000 / 60:.0f} 分钟，约 {n * per / 10000:.0f} 万 token。")
     print("\n下一步：")
     print("  python3 cli.py run data/in/shane-fx-0908 --no-truth --limit 5   # 先判 5 条看质量")
     print("  python3 cli.py run data/in/shane-fx-0908 --no-truth             # 全量")

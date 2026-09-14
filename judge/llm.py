@@ -31,6 +31,8 @@ from dataclasses import dataclass
 class Usage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    finish_reason: str = ""        # "length" = 被 max_tokens 截断
+    reasoning_chars: int = 0       # 思考模型吐在 reasoning_content 里的字数，它也吃 max_tokens
 
 
 class LLMClient:
@@ -39,7 +41,7 @@ class LLMClient:
     name = "base"
 
     def complete(self, system: str, user: str, *, temperature: float = 0.0,
-                 max_tokens: int = 4000) -> tuple[str, Usage]:
+                 max_tokens: int = 8000) -> tuple[str, Usage]:
         """返回 (模型原文, usage)。原文应当是 JSON 字符串。"""
         raise NotImplementedError
 
@@ -90,7 +92,7 @@ class DifyClient(LLMClient):
         self.why = "" if self.ready else "缺 JUDGE_DIFY_API_KEY 或 JUDGE_URL/BENCH_URL"
 
     def complete(self, system: str, user: str, *, temperature: float = 0.0,
-                 max_tokens: int = 4000) -> tuple[str, Usage]:
+                 max_tokens: int = 8000) -> tuple[str, Usage]:
         if not self.ready:
             raise NotImplementedError(self.why)
         # Dify 应用没有 system 槽位，两段拼一起发；判定纪律都在 system 里，放前面
@@ -116,11 +118,22 @@ class OpenAICompatClient(LLMClient):
         self.model = os.environ.get("JUDGE_MODEL", "").strip()
         self.timeout = int(os.environ.get("JUDGE_TIMEOUT", "120"))
         self.json_mode = os.environ.get("JUDGE_JSON_MODE", "1") != "0"
+        # 额外请求字段，JSON。典型用途：关思考模型的思考，例如
+        #   JUDGE_EXTRA_BODY={"chat_template_kwargs":{"enable_thinking":false}}
+        #   JUDGE_EXTRA_BODY={"thinking":{"type":"disabled"}}
+        # 用 probe 试哪个对这个端点有效。
+        self.extra: dict = {}
+        raw_extra = os.environ.get("JUDGE_EXTRA_BODY", "").strip()
+        if raw_extra:
+            try:
+                self.extra = json.loads(raw_extra)
+            except json.JSONDecodeError:
+                self.extra = {}
         self.ready = bool(self.url and self.model)
         self.why = "" if self.ready else "缺 JUDGE_BASE_URL 或 JUDGE_MODEL"
 
     def complete(self, system: str, user: str, *, temperature: float = 0.0,
-                 max_tokens: int = 4000) -> tuple[str, Usage]:
+                 max_tokens: int = 8000) -> tuple[str, Usage]:
         if not self.ready:
             raise NotImplementedError(self.why)
         payload = {
@@ -131,12 +144,17 @@ class OpenAICompatClient(LLMClient):
         }
         if self.json_mode:
             payload["response_format"] = {"type": "json_object"}
+        payload.update(self.extra)
         headers = {"Authorization": f"Bearer {self.key}"} if self.key else {}
         obj = _post(self.url, headers, payload, self.timeout)
-        txt = ((obj.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        ch = (obj.get("choices") or [{}])[0]
+        msg = ch.get("message") or {}
+        txt = msg.get("content") or ""
         u = obj.get("usage") or {}
         return str(txt), Usage(int(u.get("prompt_tokens") or 0),
-                               int(u.get("completion_tokens") or 0))
+                               int(u.get("completion_tokens") or 0),
+                               str(ch.get("finish_reason") or ""),
+                               len(str(msg.get("reasoning_content") or msg.get("reasoning") or "")))
 
 
 class MockClient(LLMClient):
@@ -172,7 +190,7 @@ class MockClient(LLMClient):
     TYPES = {"fact_type": "入口/功能存在性", "claim_type": "入口路径"}
 
     def complete(self, system: str, user: str, *, temperature: float = 0.0,
-                 max_tokens: int = 4000) -> tuple[str, Usage]:
+                 max_tokens: int = 8000) -> tuple[str, Usage]:
         codes = list(dict.fromkeys(re.findall(r"`(neg_\d_\d)`", system)))
         answer = q = ""
         m = re.search(r"<回答>\n(.*?)\n</回答>", user, re.S)
