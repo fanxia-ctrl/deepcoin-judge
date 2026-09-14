@@ -124,7 +124,9 @@ def main() -> int:
         p.add_argument("--source", default="auto", choices=("auto", "voice_run", "jsonl"))
         p.add_argument("--truth", type=Path, default=None)
         p.add_argument("--limit", type=int, default=0)
-        p.add_argument("--group", default="bundle", choices=("theme", "bundle", "one"))
+        p.add_argument("--group", default="one", choices=("one", "bundle", "theme"),
+                       help="one 一次输入判全部判据（默认）· bundle 按材料需求合并 · "
+                            "theme 一主题一次，调 prompt 时用")
         p.add_argument("--evidence-chars", type=int, default=4000)
 
     p = sub.add_parser("run"); add_run_args(p)

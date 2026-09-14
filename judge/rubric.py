@@ -220,7 +220,12 @@ GRADE_PASS = ("A", "B")
 
 
 def groups(mode: str, themes=None) -> list[tuple[Theme, ...]]:
-    """判据怎么分组发给模型。bundle 按 needs 自动合并。"""
+    """判据怎么分组发给模型。
+
+    默认 one：一次把五样材料和全部判据发出去，一次拿回全部 verdict。
+    bundle / theme 是备选，用来在一致率上做对照 —— 如果一次判完出现
+    「判到后面全判不命中」或判据互相污染，分组能定位是不是这个原因。
+    """
     ts = tuple(themes if themes is not None else THEMES)
     if mode == "theme":
         return [(th,) for th in ts]
