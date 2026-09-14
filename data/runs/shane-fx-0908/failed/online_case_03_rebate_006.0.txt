@@ -1,2 +1,2 @@
-# 没找到 JSON
+# 空回复（思考模型把 max_tokens 全花在思考上，content 为空）
 
