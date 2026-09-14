@@ -1,0 +1,16 @@
+# 凭证
+config.env
+*.env
+!config.env.example
+
+# 跑批产物
+data/runs/*/
+!data/runs/.gitkeep
+
+# 标注原件（含真实用户 query，按需另行同步）
+data/labels/*.xlsx
+
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
