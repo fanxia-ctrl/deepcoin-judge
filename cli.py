@@ -5,6 +5,7 @@
     python3 cli.py probe                            一次真调用，验端点与 JSON mode
     python3 cli.py check   <run>                    预检，不发请求
     python3 cli.py run     <run> [--llm auto]       判一遍
+    python3 cli.py sheet   <run|judge.jsonl>        导出人工复核 xlsx
     python3 cli.py agree   <judge.jsonl> <labels>   人机一致率
     python3 cli.py truth   <labels.xlsx>            抽权威口径
     python3 cli.py rubric                           打印判据表
@@ -52,7 +53,7 @@ def _load(a) -> tuple[list[dict], dict]:
 
 def cmd_run(a) -> int:
     load_config()
-    import llm, pipeline, report
+    import llm, pipeline, report, sheet
     from rubric import groups, THEMES
     turns, truth = _load(a)
     grps = groups(a.group, THEMES)
@@ -72,6 +73,8 @@ def cmd_run(a) -> int:
                  {"source": Path(a.run).name, "llm": client.name, "group": a.group,
                   "elapsed": time.perf_counter() - t0})
     print(f"\nOK {out_dir / 'judge.jsonl'}\nOK {out_dir / 'report.md'}")
+    sheet.build(rows, out_dir / "复核表.xlsx")
+    print(f"OK {out_dir / '复核表.xlsx'}　← 发给标注的就是这张")
     print(f"   调用 {sum(r.get('llm_calls', 0) for r in rows)} 次（缓存命中 {cache.hits}）"
           f"　token 入 {sum(r.get('prompt_tokens', 0) for r in rows):,}"
           f" 出 {sum(r.get('completion_tokens', 0) for r in rows):,}")
@@ -86,6 +89,11 @@ def cmd_check(a) -> int:
     import preflight
     turns, truth = _load(a)
     return preflight.run(turns, truth, a)
+
+
+def cmd_sheet(a) -> int:
+    import sheet
+    return sheet.main(a.judge, a.out)
 
 
 def cmd_agree(a) -> int:
@@ -140,6 +148,11 @@ def main() -> int:
     p.set_defaults(fn=cmd_run)
 
     p = sub.add_parser("check"); add_run_args(p); p.set_defaults(fn=cmd_check)
+
+    p = sub.add_parser("sheet")
+    p.add_argument("judge", type=Path, help="judge 输出目录或 judge.jsonl")
+    p.add_argument("-o", "--out", type=Path, default=None)
+    p.set_defaults(fn=cmd_sheet)
 
     p = sub.add_parser("agree")
     p.add_argument("judge_jsonl", type=Path)

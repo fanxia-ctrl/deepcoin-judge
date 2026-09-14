@@ -14,7 +14,8 @@ judge 是独立的一套东西：它不关心被测 agent 长什么样，只吃�
 python3 cli.py selftest                      # 自检，不发请求
 python3 cli.py truth data/labels/xxx.xlsx    # 从标注抽权威口径
 python3 cli.py check  <跑批目录>              # 在真实数据上预检
-python3 cli.py run    <跑批目录>              # 判一遍
+python3 cli.py run    <跑批目录>              # 判一遍，顺带出复核表
+python3 cli.py sheet  data/runs/<run>          # 单独补导复核表 xlsx
 python3 cli.py agree  data/runs/<run>/judge.jsonl data/labels/xxx.xlsx
 ```
 
@@ -97,13 +98,14 @@ judge/
   pipeline.py          并发、缓存、重试、引用校验
   score.py             门禁与计分
   report.py            run 级报告
+  sheet.py             复核表 xlsx（一行一 case，只列命中）
   agreement.py         人机一致率
   make_truth.py        标注 J 列 → 权威口径
   preflight.py         预检
   selftest.py          自检
   scorers/objective.py 规则层 R1–R11
 data/labels/           标注表与 truth.jsonl
-data/runs/<run>/       judge.jsonl · report.md · agreement.md · cache.jsonl
+data/runs/<run>/       judge.jsonl · report.md · 复核表.xlsx · agreement.md · cache.jsonl
 ```
 
 ## 三件没做完的事

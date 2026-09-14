@@ -169,7 +169,7 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
 
     return {
         "case_id": cid, "suite": turn.get("suite"),
-        "query": ctx["query"], "voice": turn.get("voice"),
+        "query": ctx["query"], "answer": ctx["answer"], "voice": turn.get("voice"),
         "kb_count": turn.get("kb_count"), "kb_top_score": turn.get("kb_top_score"),
         "out_of_coverage": ctx["signals"]["out_of_coverage"],
         "has_truth": bool(ctx["truth"]), "route_case": turn.get("route_case"),
