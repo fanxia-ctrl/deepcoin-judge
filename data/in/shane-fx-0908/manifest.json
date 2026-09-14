@@ -1,0 +1,20 @@
+{
+  "run_id": "20260908T115252Z-shane-fx-0908",
+  "tag": "shane-fx-0908",
+  "started_at": "2026-09-08T11:56:25.526594+00:00",
+  "elapsed_seconds": 212.8,
+  "cases_file": "bench/cases/online_aug_v3.jsonl",
+  "cases_sha": null,
+  "url": "https://ngrok.deeptest.cc/v1/chat-messages",
+  "git_head": "ccbc0c2f7884eb51af03cfb6d255d449f5a2751b",
+  "app": "a",
+  "api_key_tail": "AAGcud",
+  "sessions": 100,
+  "turns": 100,
+  "workers": 3,
+  "timeout": 180,
+  "fresh": true,
+  "keep_events": true,
+  "transport_failures": 5,
+  "envelope_broken": 1
+}

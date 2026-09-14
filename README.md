@@ -5,26 +5,26 @@
 judge 是独立的一套东西：它不关心被测 agent 长什么样，只吃「一轮问答 + 材料」。
 接一个新数据源 = 在 `judge/adapters.py` 里加一个 loader。
 
-**LLM 客户端已实现（Dify / OpenAI 兼容），只差凭证。** 复制 `config.env.example`
-成 `config.env` 填好就能开跑；`--llm mock` 可以不花钱跑通全链路。
+凭证在 `config.env`，待判数据在 `data/in/`，都随仓库走 —— clone 下来直接跑。
 
 ## 一分钟上手
 
 ```bash
-python3 cli.py selftest                      # 自检，不发请求
-python3 cli.py truth data/labels/xxx.xlsx    # 从标注抽权威口径
-python3 cli.py check  <跑批目录>              # 在真实数据上预检
-python3 cli.py run    <跑批目录> --no-truth   # 判一遍，顺带出复核表
-python3 cli.py sheet  data/runs/<run>          # 单独补导复核表 xlsx
-python3 cli.py agree  data/runs/<run>/judge.jsonl data/labels/xxx.xlsx
+pip3 install openpyxl                                  # 只导复核表用；判本身零依赖
+python3 cli.py selftest                                # 不发请求，验代码+凭证
+python3 cli.py probe                                   # 一次真调用，验端点和 JSON mode
+python3 cli.py run data/in/shane-fx-0908 --no-truth    # 判 94 轮，出 judge.jsonl / report.md / 复核表.xlsx
 ```
 
-**没有权威口径就加 `--no-truth`**：T1 整个摘掉，每条 case 都判其余 4 主题 13 条判据，
-口径一致，一致率才可比。不加的话 T1 会逐条「无法判定」，有 truth 的和没 truth 的
-判据数不一样，没法比。`data/labels/truth.jsonl` 是上一批标注留下的，只覆盖那 100 条。
+结果在 `data/runs/shane-fx-0908/`，提交回仓库就能在别的机器上拉到。
+`复核表.xlsx` 是发给标注的那张：一行一 case，只列命中的判据，人标「判对了吗」和「有没有漏判」。
 
-`<跑批目录>` 目前支持 voice agent 的 `bench/runs/<run_id>`（里面要有 `turns.jsonl`），
-或任意对齐了字段的 jsonl（`--source jsonl`）。
+`--no-truth` 是现在的常态：judge 先出结果再送人复核，不依赖权威口径，T1 整个摘掉，
+每条判其余 4 主题 13 条判据。`data/labels/truth.jsonl` 是上一批标注留下的，只覆盖那 100 条，
+不加 `--no-truth` 才会用到。
+
+其他数据源：`bench/runs/<run_id>` 目录（要有 `turns.jsonl`）或对齐了字段的 jsonl（`--source jsonl`）。
+再多一种 = 在 `judge/adapters.py` 加一个 loader。
 
 ## 判据表 v2
 
@@ -108,7 +108,8 @@ judge/
   preflight.py         预检
   selftest.py          自检
   scorers/objective.py 规则层 R1–R11
-data/labels/           标注表与 truth.jsonl
+data/in/<name>/        待判数据（turns.jsonl + manifest.json）
+data/labels/           上一批标注抽出的 truth.jsonl
 data/runs/<run>/       judge.jsonl · report.md · 复核表.xlsx · agreement.md · cache.jsonl
 ```
 
