@@ -39,7 +39,7 @@ class LLMClient:
     name = "base"
 
     def complete(self, system: str, user: str, *, temperature: float = 0.0,
-                 max_tokens: int = 1500) -> tuple[str, Usage]:
+                 max_tokens: int = 4000) -> tuple[str, Usage]:
         """返回 (模型原文, usage)。原文应当是 JSON 字符串。"""
         raise NotImplementedError
 
@@ -90,7 +90,7 @@ class DifyClient(LLMClient):
         self.why = "" if self.ready else "缺 JUDGE_DIFY_API_KEY 或 JUDGE_URL/BENCH_URL"
 
     def complete(self, system: str, user: str, *, temperature: float = 0.0,
-                 max_tokens: int = 1500) -> tuple[str, Usage]:
+                 max_tokens: int = 4000) -> tuple[str, Usage]:
         if not self.ready:
             raise NotImplementedError(self.why)
         # Dify 应用没有 system 槽位，两段拼一起发；判定纪律都在 system 里，放前面
@@ -120,7 +120,7 @@ class OpenAICompatClient(LLMClient):
         self.why = "" if self.ready else "缺 JUDGE_BASE_URL 或 JUDGE_MODEL"
 
     def complete(self, system: str, user: str, *, temperature: float = 0.0,
-                 max_tokens: int = 1500) -> tuple[str, Usage]:
+                 max_tokens: int = 4000) -> tuple[str, Usage]:
         if not self.ready:
             raise NotImplementedError(self.why)
         payload = {
@@ -172,7 +172,7 @@ class MockClient(LLMClient):
     TYPES = {"fact_type": "入口/功能存在性", "claim_type": "入口路径"}
 
     def complete(self, system: str, user: str, *, temperature: float = 0.0,
-                 max_tokens: int = 1500) -> tuple[str, Usage]:
+                 max_tokens: int = 4000) -> tuple[str, Usage]:
         codes = list(dict.fromkeys(re.findall(r"`(neg_\d_\d)`", system)))
         answer = q = ""
         m = re.search(r"<回答>\n(.*?)\n</回答>", user, re.S)

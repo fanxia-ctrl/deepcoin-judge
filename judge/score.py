@@ -16,6 +16,8 @@ from collections import defaultdict
 from rubric import HARD_FAIL, RATIOS, THEME_BY_TIP, TIP_BY_CODE
 
 DEDUCT_LIMIT = 2.0
+# R9 账户事实无工具 / R10 空结果说成异常 = neg_5_1[账户事实] 的规则版，并进 T5
+RULE_THEME = {"R9": "grounding", "R10": "grounding"}
 
 
 def score(verdicts: list[dict], rule_hits: list | None = None,
@@ -57,8 +59,10 @@ def score(verdicts: list[dict], rule_hits: list | None = None,
 
     scored_rules = [h for h in rule_hits if getattr(h, "kind", "") == "scored"]
     contract = [h for h in rule_hits if getattr(h, "kind", "") == "contract"]
+    # 规则层与 LLM 层判的是同一个观察时，并进同一主题取最大值，不双记
     for h in scored_rules:
-        by_theme[f"rule:{h.rule}"] = max(by_theme[f"rule:{h.rule}"], h.weight)
+        th = RULE_THEME.get(h.rule, f"rule:{h.rule}")
+        by_theme[th] = max(by_theme[th], h.weight)
 
     hard = [c for c, w in hit_weight.items() if w >= HARD_FAIL]
     hard += [h.rule for h in scored_rules if h.weight >= HARD_FAIL]

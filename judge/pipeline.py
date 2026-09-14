@@ -148,6 +148,11 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
             if not err:
                 cache.put(k, raw)
                 break
+            if raw is not None and cache.path is not None:
+                fdir = cache.path.parent / "failed"
+                fdir.mkdir(exist_ok=True)
+                (fdir / f"{cid.replace(':', '_')}.{attempt}.txt").write_text(
+                    f"# {err}\n\n{raw}", encoding="utf-8")
             raw = None
         if err:
             errs.append(f"[{glabel}] {err}")
