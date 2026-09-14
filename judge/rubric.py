@@ -26,6 +26,7 @@ NEEDS_QUERY = "query"
 NEEDS_ANSWER = "answer"
 NEEDS_EVIDENCE = "evidence"
 NEEDS_TRUTH = "truth"
+NEEDS_RULES = "rules"          # 路由业务规则：模型 system prompt 里按路由固定的那段
 NEEDS_SIGNALS = "signals"
 
 
@@ -71,10 +72,14 @@ class Theme:
 
 THEMES: tuple[Theme, ...] = (
     Theme("fact", "T1", "事实与口径冲突",
-          (NEEDS_QUERY, NEEDS_ANSWER, NEEDS_EVIDENCE),
-          hint="只判「说错了」，不判「没答到点上」。口径来源：有<权威口径>先以它为准，"
-               "没有就以<本轮证据>里的切片为口径。只判「与口径相悖」，"
-               "不判「口径里没提」—— 那是 neg_5_1 无据强答。两边都没有可对的事实就填 hit=null。",
+          (NEEDS_QUERY, NEEDS_ANSWER, NEEDS_EVIDENCE, NEEDS_RULES),
+          hint="只判「说错了」，不判「没答到点上」。口径有三处，优先级从高到低："
+               "<权威口径>（人工确认）＞<本轮证据>（KB 切片和工具返回，模型这一轮实际看到的）"
+               "＞<路由业务规则>（模型 system prompt 里的固定业务口径）。"
+               "回答里的平台事实与其中任一处相悖即命中；工具返回了数据却被读错（如把开/平仓费率"
+               "说成 maker/taker、把空结果说成有记录）也算。只判「相悖」，不判「没提」—— 那是 neg_5_1。"
+               "三处都没有可对的事实就填 hit=null。若<本轮证据>与<路由业务规则>自相矛盾，"
+               "不判模型，why 里写「口径冲突」。",
           tips=(
               Tip("neg_1_1", "与口径冲突",
                   "回答里的平台特定事实与口径（人工确认的正确说法，或召回切片）相反，用户照着做会做错",
@@ -166,13 +171,14 @@ THEMES: tuple[Theme, ...] = (
           )),
 
     Theme("grounding", "T5", "证据使用",
-          (NEEDS_QUERY, NEEDS_ANSWER, NEEDS_EVIDENCE, NEEDS_SIGNALS),
+          (NEEDS_QUERY, NEEDS_ANSWER, NEEDS_EVIDENCE, NEEDS_RULES, NEEDS_SIGNALS),
           hint="回答与本轮证据的关系：没证据却答得确定，有证据却不答。"
-               "关于用户个人账户的断言归 T3，本主题只看平台一般事实；"
+               "「证据」= <本轮证据>里的 KB 切片和工具返回，加上<路由业务规则>；"
+               "三处任一能找到出处就不算无据。关于用户个人账户的断言归 T3，本主题只看平台一般事实；"
                "通用排障（重启、切网络、更新版本）不算无据。没有证据材料时输出「无法判定」。",
           tips=(
               Tip("neg_5_1", "无据强答",
-                  "回答里的平台特定断言在证据里找不到出处，或比证据说得更确定",
+                  "回答里的平台特定断言在本轮证据和路由业务规则里都找不到出处，或比出处说得更确定",
                   SEVERE, 4, 1.00,
                   type_field="claim_type",
                   type_options=("数值/费率/时限", "账户事实", "入口路径", "规则说明", "仅措辞过强"),

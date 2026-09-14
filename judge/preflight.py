@@ -31,10 +31,17 @@ def run(turns: list[dict], truth: dict, a) -> int:
     need = ("case_id", "query", "voice", "raw_answer", "kb_hits", "kb_count")
     miss = {k for t in turns for k in need if t.get(k) is None and k != "kb_top_score"}
     chk("必需字段齐全", not miss, f"缺 {miss}" if miss else "、".join(need))
-    no_tool = sum(1 for t in turns if t.get("tool_node_titles") is None
-                  and t.get("tool_names") is None)
+    has_field = sum(1 for t in turns if t.get("tool_calls") is not None
+                    or t.get("tool_node_titles") is not None or t.get("tool_names") is not None)
+    called = sum(1 for t in turns if t.get("tool_calls") or t.get("tool_names"))
     chk("工具记录字段", True,
-        f"{len(turns) - no_tool}/{len(turns)} 轮有 —— 没有时 R9/R10 不触发，neg_3_1 以 LLM 为主")
+        f"{has_field}/{len(turns)} 轮有字段，{called} 轮实际调了接口 —— "
+        f"没字段时 R9/R10 不触发，neg_3_1 以 LLM 为主")
+    has_evtext = sum(1 for t in turns if t.get("evidence_text"))
+    has_rules = sum(1 for t in turns if t.get("route_rules"))
+    chk("模型实际看到的证据", True,
+        f"evidence_text {has_evtext}/{len(turns)}、route_rules {has_rules}/{len(turns)} —— "
+        f"没有 evidence_text 的轮次退回用 kb_hits 拼")
 
     themes = THEMES
     grps = groups(a.group, themes)
@@ -108,7 +115,7 @@ def run(turns: list[dict], truth: dict, a) -> int:
             f"{have_truth}/{len(turns)} 轮 —— 其余轮 T1 输出「无法判定」，不算 0 分")
     no_ev = sum(1 for t in turns
                 if "evidence" in missing_materials(build_ctx(t, truth, a.evidence_chars)))
-    chk("证据覆盖", True, f"{len(turns) - no_ev}/{len(turns)} 轮有召回 —— 其余轮 T1/T5 不判")
+    chk("证据覆盖", True, f"{len(turns) - no_ev}/{len(turns)} 轮有证据（切片或工具返回）—— 其余轮 T1/T5 不判")
 
     n_calls = len(turns) * len(grps)
     print(f"\n  接上模型后：约 {n_calls} 次调用（{len(turns)} 轮 × {len(grps)} 组），"

@@ -57,7 +57,7 @@ def build(rows: list[dict], out: Path) -> Path:
     ws = wb.active
     ws.title = "标注"
 
-    head = ["case_id", "suite", "route_case", "问题", "回答",
+    head = ["case_id", "suite", "route_case", "问题", "回答", "模型看到的证据", "工具调用",
             "机器门禁", "扣分", "命中数", "规则命中"]
     for i in range(1, n_hit + 1):
         head += [f"命中{i}", f"命中{i} 判对吗"]
@@ -65,8 +65,12 @@ def build(rows: list[dict], out: Path) -> Path:
     ws.append(head)
 
     for r, vs in zip(rows, hit_lists):
+        ev = str(r.get("evidence") or "")
         line = [r.get("case_id", ""), r.get("suite", ""), r.get("route_case", ""),
                 r.get("query", ""), r.get("answer") or r.get("voice") or "",
+                ev[:1500] + ("…" if len(ev) > 1500 else ""),
+                "\n".join(f"{c.get('name','')}{'（空）' if c.get('empty') else ''}"
+                          for c in (r.get("tool_calls") or [])),
                 r.get("verdict", ""), r.get("deduct", 0), len(vs),
                 "、".join(r.get("contract_hits", []) + r.get("scored_rules", [])) or ""]
         for i in range(n_hit):
@@ -75,7 +79,7 @@ def build(rows: list[dict], out: Path) -> Path:
         ws.append(line)
 
     n_rows = len(rows) + 1
-    first_hit = 10
+    first_hit = 12
     miss_col = first_hit + n_hit * 2
 
     for c in range(1, len(head) + 1):
@@ -96,7 +100,7 @@ def build(rows: list[dict], out: Path) -> Path:
             cell.fill = MARK_FILL if cell.column in mark_cols else JUDGE_FILL
         ws.row_dimensions[row[0].row].height = 96
 
-    widths = {1: 14, 2: 14, 3: 12, 4: 30, 5: 46, 6: 11, 7: 7, 8: 7, 9: 12}
+    widths = {1: 14, 2: 14, 3: 12, 4: 30, 5: 46, 6: 46, 7: 22, 8: 11, 9: 7, 10: 7, 11: 12}
     for i in range(n_hit):
         widths[first_hit + i * 2] = 42
         widths[first_hit + i * 2 + 1] = 11

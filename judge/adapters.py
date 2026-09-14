@@ -12,6 +12,8 @@ from pathlib import Path
 # judge 需要的字段。缺的用 None，缺材料的主题会标「无法判定」而不是算 0 分。
 FIELDS = ("case_id", "suite", "query", "voice", "detail", "raw_answer", "envelope_ok",
           "kb_hits", "kb_count", "kb_top_score", "route_case",
+          # 模型实际看到的证据与工具返回（extract_run 新字段；老数据没有就是 None）
+          "evidence_text", "route_rules", "tool_calls",
           "tool_node_titles", "tool_names", "elapsed_ms", "http_status", "error")
 
 

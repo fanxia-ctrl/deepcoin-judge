@@ -39,9 +39,11 @@ LATIN = re.compile(r"[A-Za-z]")
 
 ACCOUNT_FACT = re.compile(
     r"您(目前|现在|当前)?的?(账户|仓位|持仓|订单|余额|保证金|返佣)[^。；]{0,24}"
-    r"(是|有|为|显示|已|共)|"
+    r"(是|有|为|显示|已|共|不足|充足)|"
     r"您在\s*[A-Z]{2,8}(USDT|USD)?|杠杆(约|为)\s*\d|开仓价(约|为)\s*\d|"
     r"共\s*\d+(\.\d+)?\s*(U|USDT|张|笔)")
+# 让用户自查的句子不算断言账户事实：「请确认您的账户余额是否充足」
+SELF_CHECK = re.compile(r"请(您)?(确认|检查|查看|核对|核实)|是否|有没有|吗[？?]?$")
 EMPTY_AS_ERROR = re.compile(r"账户异常|数据(丢失|异常|错误)|系统(故障|异常)|记录(丢失|被清)")
 PERSONAL_DATA = re.compile(
     r"我的|我这(单|笔|个)|帮我(看|查|核)|为什么我|怎么我的|我(开|平|下)的")
@@ -162,21 +164,26 @@ def check_scored(turn: dict) -> list[Hit]:
             out.append(Hit("R8", "语种不跟随", "scored", 0.6, text[:40],
                            f"提问{'中文' if q_zh else '英文'}，回答{'中文' if a_zh else '英文'}"))
 
-    tools = turn.get("tool_node_titles") or turn.get("tool_names") or []
+    tools, empty, tools_known = _tools(turn)
     has_tools = bool(tools)
-    tools_known = turn.get("tool_node_titles") is not None or turn.get("tool_names") is not None
 
-    # R9 账户事实无工具调用
-    m = ACCOUNT_FACT.search(text)
+    # R9 账户事实无工具调用（按句判，让用户自查的句子跳过）
+    m = None
+    for sent in re.split(r"[。；！!\n]", text):
+        mm = ACCOUNT_FACT.search(sent)
+        if mm and not SELF_CHECK.search(sent):
+            m = mm
+            break
     if m and tools_known and not has_tools:
         out.append(Hit("R9", "账户事实无工具调用", "scored", 3.0, m.group(0)[:50],
                        "回答给出具体账户数据，本轮没有任何工具记录"))
 
-    # R10 空结果被说成异常
+    # R10 空结果被说成异常：工具查了是空（没持仓/0 条），或根本没查，却断言账户/系统异常
     m = EMPTY_AS_ERROR.search(text)
-    if m and tools_known and not has_tools:
-        out.append(Hit("R10", "空结果被说成异常", "scored", 3.0, m.group(0),
-                       "没有工具返回却断言账户/系统异常"))
+    if m and tools_known and (not has_tools or empty):
+        why = (f"工具返回为空（{'、'.join(e.split(' ')[0] for e in empty[:3])}）却断言异常"
+               if empty else "没有工具返回却断言账户/系统异常")
+        out.append(Hit("R10", "空结果被说成异常", "scored", 3.0, m.group(0), why))
     return out
 
 
@@ -206,21 +213,37 @@ def check_cluster(turns: list[dict], *, sim_threshold: float = 0.6) -> list[dict
 
 # ── 信号 ──────────────────────────────────────────────────
 def retrieval_signals(turn: dict, low_score: float = LOW_SCORE) -> dict:
+    """零召回 / 超出覆盖 说的是「模型手里有没有材料」，工具返回了数据也算有。"""
     kb = int(turn.get("kb_count") or 0)
     top = turn.get("kb_top_score")
     top = float(top) if top is not None else None
-    low = kb == 0 or (top is not None and top < low_score)
-    return {"kb_count": kb, "kb_top_score": top, "zero_recall": kb == 0,
+    tool_data = any(not c.get("empty") for c in (turn.get("tool_calls") or []))
+    low = (kb == 0 or (top is not None and top < low_score)) and not tool_data
+    return {"kb_count": kb, "kb_top_score": top,
+            "zero_recall": kb == 0 and not tool_data,
+            "tool_data": tool_data,
             "out_of_coverage": low}
 
 
-def account_signals(turn: dict) -> dict:
-    tools = turn.get("tool_node_titles") or turn.get("tool_names") or []
+def _tools(turn: dict) -> tuple[list[str], list[str], bool]:
+    """(调了哪些工具, 其中返回为空的, 这条数据到底有没有工具记录字段)"""
+    calls = turn.get("tool_calls")
+    if calls is not None:
+        names = [str(c.get("name") or "") for c in calls]
+        empty = [str(c.get("name") or "") for c in calls if c.get("empty")]
+        return names, empty, True
+    names = list(turn.get("tool_node_titles") or turn.get("tool_names") or [])
     known = turn.get("tool_node_titles") is not None or turn.get("tool_names") is not None
+    return names, [], known
+
+
+def account_signals(turn: dict) -> dict:
+    tools, empty, known = _tools(turn)
     return {"personal_query": bool(PERSONAL_DATA.search(str(turn.get("query") or ""))),
             "called_account_api": bool(tools),
             "tool_record_available": known,
-            "tools_called": list(tools)[:6]}
+            "tools_called": tools[:6],
+            "tools_returned_empty": empty[:6]}
 
 
 def _sim(a: str, b: str) -> float:

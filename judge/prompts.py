@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from rubric import (NEEDS_ANSWER, NEEDS_EVIDENCE, NEEDS_QUERY, NEEDS_SIGNALS,
-                    NEEDS_TRUTH, Theme)
+from rubric import (NEEDS_ANSWER, NEEDS_EVIDENCE, NEEDS_QUERY, NEEDS_RULES,
+                    NEEDS_SIGNALS, NEEDS_TRUTH, Theme)
 
 
 @dataclass(frozen=True)
@@ -22,6 +22,12 @@ class _Merged:
 BASE = """你在评估一个加密货币交易所的**语音客服**的单轮回答。
 
 你只做一件事：逐条判断下面列出的判据是否命中。不要给总分，不要改写回答。
+
+材料说明：
+- <本轮证据> 是被评估的模型这一轮**实际看到的**检索结果与工具返回，原文未改。
+  「Knowledge evidence」是知识库切片，「Live account evidence」是查用户账户/行情接口的返回。
+- <路由业务规则> 是该模型 system prompt 里按路由固定的业务口径，它每一轮都看得到。
+- <权威口径> 是人工确认的正确说法，有则优先于以上两者。
 
 判定纪律：
 - 只根据给你的材料判断。材料里没有的事实，不要用你自己的知识补。
@@ -100,7 +106,10 @@ def build(themes, ctx: dict) -> tuple[str, str]:
         u.append(f"<权威口径>\n{tr or '（没有人工口径 —— T1 以<本轮证据>为口径）'}\n</权威口径>")
     if NEEDS_EVIDENCE in theme.needs:
         ev = (ctx.get("evidence") or "").strip()
-        u.append(f"<本轮证据>\n{ev or '（本轮一条切片都没召回）'}\n</本轮证据>")
+        u.append(f"<本轮证据>\n{ev or '（本轮没有召回切片，也没有工具返回）'}\n</本轮证据>")
+    if NEEDS_RULES in theme.needs:
+        ru = (ctx.get("rules") or "").strip()
+        u.append(f"<路由业务规则>\n{ru or '（本轮没有路由业务规则）'}\n</路由业务规则>")
     if NEEDS_SIGNALS in theme.needs:
         s = ctx.get("signals") or {}
         u.append("<机器信号>\n" + "\n".join(f"{k}: {v}" for k, v in s.items()) + "\n</机器信号>")
