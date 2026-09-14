@@ -199,7 +199,9 @@ def run(turns, client, truth, grps, *, workers=4, cache_path=None, retries=1,
             if r.get("fatal"):
                 raise NotImplementedError(r["fatal"])
             rows.append(r)
-            if i % 10 == 0 or i == len(turns):
-                progress(f"  {i}/{len(turns)}")
+            # 小批量逐条报，大批量每 10 条报 —— 否则 --limit 5 会看起来像卡住
+            if len(turns) <= 20 or i % 10 == 0 or i == len(turns):
+                progress(f"  {i}/{len(turns)}  {r.get('case_id', '')}  {r.get('verdict', '')}"
+                         f"  {r.get('elapsed_ms', 0) / 1000:.0f}s")
     rows.sort(key=lambda r: (r.get("suite") or "", r.get("case_id") or ""))
     return rows, cache
