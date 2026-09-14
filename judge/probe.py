@@ -79,12 +79,14 @@ def run() -> int:
 
 def _summary(ms: int, usage) -> None:
     per = usage.prompt_tokens + usage.completion_tokens
-    print(f"\n  单次约 {ms}ms / {per} token。94 轮 × 4 组 = 376 次调用，"
-          f"串行约 {376 * ms / 1000 / 60:.0f} 分钟，--workers 4 约 {376 * ms / 4000 / 60:.0f} 分钟，"
-          f"合计约 {376 * per / 10000:.0f} 万 token。")
+    # 默认 --group one：一轮一次调用；探活只发 1 条判据，全量 13 条 prompt 更长，按 4 倍估
+    n, per_full = 94, per * 4
+    print(f"\n  单次约 {ms}ms / {per} token（探活只带 1 条判据）。"
+          f"全量 {n} 轮 × 1 组 = {n} 次调用，"
+          f"--workers 4 约 {n * ms * 2 / 4000 / 60:.0f} 分钟，约 {n * per_full / 10000:.0f} 万 token。")
     print("\n下一步：")
-    print("  python3 cli.py run <跑批目录> --limit 5     # 先判 5 条看质量")
-    print("  python3 cli.py run <跑批目录>               # 全量")
+    print("  python3 cli.py run data/in/shane-fx-0908 --no-truth --limit 5   # 先判 5 条看质量")
+    print("  python3 cli.py run data/in/shane-fx-0908 --no-truth             # 全量")
 
 
 if __name__ == "__main__":
