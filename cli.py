@@ -36,12 +36,23 @@ def load_config() -> None:
                 os.environ.setdefault(k.strip(), v.strip())
 
 
+def active_themes(a):
+    """--no-truth：把需要权威口径的主题整个摘掉，而不是让它逐条「无法判定」。
+    口径统一 —— 每条 case 判的判据一样多，一致率才可比。"""
+    from rubric import NEEDS_TRUTH, THEMES
+    if getattr(a, "no_truth", False):
+        return tuple(th for th in THEMES if NEEDS_TRUTH not in th.needs)
+    return THEMES
+
+
 def _load(a) -> tuple[list[dict], dict]:
     import adapters
     turns = [t for t in adapters.load(a.source, a.run) if adapters.ok(t)]
     if a.limit:
         turns = turns[:a.limit]
     truth = {}
+    if getattr(a, "no_truth", False):
+        return turns, truth
     tp = a.truth or (ROOT / "data/labels/truth.jsonl")
     if tp and Path(tp).exists():
         for line in Path(tp).read_text(encoding="utf-8").splitlines():
@@ -54,14 +65,18 @@ def _load(a) -> tuple[list[dict], dict]:
 def cmd_run(a) -> int:
     load_config()
     import llm, pipeline, report, sheet
-    from rubric import groups, THEMES
+    from rubric import groups
     turns, truth = _load(a)
-    grps = groups(a.group, THEMES)
+    themes = active_themes(a)
+    grps = groups(a.group, themes)
     client = llm.get_client(a.llm)
     out_dir = Path(a.out or ROOT / "data/runs" / Path(a.run).name)
     out_dir.mkdir(parents=True, exist_ok=True)
+    n_tips = sum(len(th.tips) for th in themes)
     print(f"judge: {len(turns)} 轮 × {len(grps)} 组（--group {a.group}）= "
-          f"约 {len(turns) * len(grps)} 次调用，模型 {client.name}，权威口径 {len(truth)} 条")
+          f"约 {len(turns) * len(grps)} 次调用，模型 {client.name}，"
+          f"判据 {n_tips} 条，权威口径 "
+          f"{'关闭（--no-truth，不判 T1）' if getattr(a, 'no_truth', False) else str(len(truth)) + ' 条'}")
     t0 = time.perf_counter()
     rows, cache = pipeline.run(
         turns, client, truth, grps, workers=a.workers,
@@ -136,6 +151,8 @@ def main() -> int:
                        help="one 一次输入判全部判据（默认）· bundle 按材料需求合并 · "
                             "theme 一主题一次，调 prompt 时用")
         p.add_argument("--evidence-chars", type=int, default=4000)
+        p.add_argument("--no-truth", action="store_true",
+                       help="没有权威口径：整个摘掉 T1，只判其余 4 主题 13 条判据")
 
     p = sub.add_parser("run"); add_run_args(p)
     p.add_argument("--llm", default="auto", choices=("auto", "mock", "dify", "openai"))

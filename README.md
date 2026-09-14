@@ -14,10 +14,14 @@ judge 是独立的一套东西：它不关心被测 agent 长什么样，只吃�
 python3 cli.py selftest                      # 自检，不发请求
 python3 cli.py truth data/labels/xxx.xlsx    # 从标注抽权威口径
 python3 cli.py check  <跑批目录>              # 在真实数据上预检
-python3 cli.py run    <跑批目录>              # 判一遍，顺带出复核表
+python3 cli.py run    <跑批目录> --no-truth   # 判一遍，顺带出复核表
 python3 cli.py sheet  data/runs/<run>          # 单独补导复核表 xlsx
 python3 cli.py agree  data/runs/<run>/judge.jsonl data/labels/xxx.xlsx
 ```
+
+**没有权威口径就加 `--no-truth`**：T1 整个摘掉，每条 case 都判其余 4 主题 13 条判据，
+口径一致，一致率才可比。不加的话 T1 会逐条「无法判定」，有 truth 的和没 truth 的
+判据数不一样，没法比。`data/labels/truth.jsonl` 是上一批标注留下的，只覆盖那 100 条。
 
 `<跑批目录>` 目前支持 voice agent 的 `bench/runs/<run_id>`（里面要有 `turns.jsonl`），
 或任意对齐了字段的 jsonl（`--source jsonl`）。

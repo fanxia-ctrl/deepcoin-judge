@@ -7,7 +7,7 @@ import llm as _llm
 import prompts
 from context import build_ctx, missing_materials
 from pipeline import parse_verdicts, verify_quotes
-from rubric import THEMES, TIP_BY_CODE, group_label, groups
+from rubric import NEEDS_TRUTH, THEMES, TIP_BY_CODE, group_label, groups
 from score import score
 from scorers import objective
 
@@ -36,7 +36,9 @@ def run(turns: list[dict], truth: dict, a) -> int:
     chk("工具记录字段", True,
         f"{len(turns) - no_tool}/{len(turns)} 轮有 —— 没有时 R9/R10 不触发，neg_3_1 以 LLM 为主")
 
-    grps = groups(a.group, THEMES)
+    themes = (tuple(th for th in THEMES if NEEDS_TRUTH not in th.needs)
+              if getattr(a, "no_truth", False) else THEMES)
+    grps = groups(a.group, themes)
     chk(f"判据分组（--group {a.group}）", True,
         f"{len(grps)} 组：" + " | ".join(group_label(g) for g in grps))
     seen, total_chars = set(), 0
@@ -61,7 +63,10 @@ def run(turns: list[dict], truth: dict, a) -> int:
                 f"（条件型 {len(cond)}）" + (f"　{bad or extra}" if bad or extra else ""))
         except Exception as exc:
             chk(f"  [{group_label(grp)}]", False, f"{type(exc).__name__}: {exc}")
-    chk("分组没漏判据", seen == set(TIP_BY_CODE), f"{len(seen)}/{len(TIP_BY_CODE)}")
+    want = {t.code for th in themes for t in th.tips}
+    chk("分组没漏判据", seen == want,
+        f"{len(seen)}/{len(want)}" + ("（T1 已按 --no-truth 摘掉）"
+                                      if len(want) < len(TIP_BY_CODE) else ""))
 
     m = _llm.MockClient()
     probe = True
@@ -95,9 +100,13 @@ def run(turns: list[dict], truth: dict, a) -> int:
     chk("门禁：缺材料标不完整",
         score([], undecidable=["fact"])["verdict"] == "判定不完整")
 
-    have_truth = sum(1 for t in turns if str(t.get("case_id")) in truth)
-    chk("权威口径覆盖", True,
-        f"{have_truth}/{len(turns)} 轮 —— 其余轮 T1 输出「无法判定」，不算 0 分")
+    if getattr(a, "no_truth", False):
+        print("  OK   权威口径　已关（--no-truth）：T1 整个摘掉，每条都判 "
+              f"{sum(len(th.tips) for th in themes)} 条判据，口径一致")
+    else:
+        have_truth = sum(1 for t in turns if str(t.get("case_id")) in truth)
+        chk("权威口径覆盖", True,
+            f"{have_truth}/{len(turns)} 轮 —— 其余轮 T1 输出「无法判定」，不算 0 分")
     no_ev = sum(1 for t in turns
                 if "evidence" in missing_materials(build_ctx(t, truth, a.evidence_chars)))
     chk("证据覆盖", True, f"{len(turns) - no_ev}/{len(turns)} 轮有召回 —— 其余轮 T5 不判")
