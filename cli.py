@@ -6,7 +6,8 @@
     python3 cli.py check   <run>                    预检，不发请求
     python3 cli.py run     <run> [--llm auto]       判一遍
     python3 cli.py sheet   <run|judge.jsonl>        导出人工复核 xlsx
-    python3 cli.py agree   <judge.jsonl> <labels>   人机一致率
+    python3 cli.py review  <复核表.xlsx>            复核结果：逐判据精确率/召回率、漏判清单、抽权威口径
+    python3 cli.py agree   <judge.jsonl> <labels>   人机一致率（老标注格式）
     python3 cli.py truth   <labels.xlsx>            抽权威口径
     python3 cli.py rubric                           打印判据表
     python3 cli.py selftest                         自检
@@ -102,6 +103,11 @@ def cmd_sheet(a) -> int:
     return sheet.main(a.judge, a.out)
 
 
+def cmd_review(a) -> int:
+    import review
+    return review.main(a.review, a.out, a.truth_out)
+
+
 def cmd_agree(a) -> int:
     import agreement
     return agreement.main(a.judge_jsonl, a.labels, a.out)
@@ -161,6 +167,13 @@ def main() -> int:
     p.add_argument("judge", type=Path, help="judge 输出目录或 judge.jsonl")
     p.add_argument("-o", "--out", type=Path, default=None)
     p.set_defaults(fn=cmd_sheet)
+
+    p = sub.add_parser("review")
+    p.add_argument("review", type=Path, help="人核过的复核表 xlsx")
+    p.add_argument("-o", "--out", type=Path, default=None)
+    p.add_argument("--truth-out", type=Path, default=None,
+                   help="把复核里的事实抽成权威口径并入这个 truth.jsonl（不给就不抽）")
+    p.set_defaults(fn=cmd_review)
 
     p = sub.add_parser("agree")
     p.add_argument("judge_jsonl", type=Path)
