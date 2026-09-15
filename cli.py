@@ -105,7 +105,7 @@ def cmd_sheet(a) -> int:
 
 def cmd_review(a) -> int:
     import review
-    return review.main(a.review, a.out, a.truth_out)
+    return review.main(a.review, a.out, a.truth_out, a.judge)
 
 
 def cmd_agree(a) -> int:
@@ -173,6 +173,8 @@ def main() -> int:
     p.add_argument("-o", "--out", type=Path, default=None)
     p.add_argument("--truth-out", type=Path, default=None,
                    help="把复核里的事实抽成权威口径并入这个 truth.jsonl（不给就不抽）")
+    p.add_argument("--judge", type=Path, default=None,
+                   help="拿这张复核表当 GT，对照新一轮的 judge.jsonl 算指标")
     p.set_defaults(fn=cmd_review)
 
     p = sub.add_parser("agree")

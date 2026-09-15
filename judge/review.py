@@ -259,7 +259,70 @@ def merge_truth(cands: list[dict], truth_path: Path) -> tuple[int, int]:
     return added, updated
 
 
-def main(review_xlsx: Path, out: Path | None = None, truth_out: Path | None = None) -> int:
+def against_judge(rows: list[dict], judge_jsonl: Path) -> list[str]:
+    """拿人核过的这张表当 GT，对照新一轮 judge 输出。
+    人核给出的已知集合：H+ = 判「对」的命中 ∪ 标的漏判；H- = 判「错」的命中（换条也算：那条确实不该命中）。
+    新一轮命中落在 H+ 是 TP，落在 H- 是 FP，H+ 里没命中的是 FN；两边都不在的是「新命中，待核」。"""
+    J = {}
+    for l in Path(judge_jsonl).read_text(encoding="utf-8").splitlines():
+        if l.strip():
+            o = json.loads(l)
+            J[o["case_id"]] = o
+    TP, FP, FN, NEW = Counter(), Counter(), Counter(), Counter()
+    kept_fp, fixed_fp, recovered, lost = [], [], [], []
+    n_common = 0
+    for r in rows:
+        j = J.get(r["case_id"])
+        if j is None:
+            continue
+        n_common += 1
+        hits_new = set(j.get("neg_hits") or [])
+        pos = {h["code"] for h in r["hits"] if h["mark"] == "对"} | set(r["missed"])
+        neg = {h["code"] for h in r["hits"] if h["mark"] == "错"} - pos
+        for c in hits_new:
+            if c in pos:
+                TP[c] += 1
+            elif c in neg:
+                FP[c] += 1
+                kept_fp.append((r["case_id"], c))
+            else:
+                NEW[c] += 1
+        for c in pos - hits_new:
+            FN[c] += 1
+            if c in {h["code"] for h in r["hits"]}:
+                lost.append((r["case_id"], c))
+        for c in neg - hits_new:
+            fixed_fp.append((r["case_id"], c))
+        for c in set(r["missed"]) & hits_new:
+            recovered.append((r["case_id"], c))
+    tt, tf, tn = sum(TP.values()), sum(FP.values()), sum(FN.values())
+    p, rc, f = _prf(tt, tf, tn)
+    L = ["", f"## 对照新一轮 judge · `{Path(judge_jsonl).parent.name}/{Path(judge_jsonl).name}`", "",
+         f"以这张复核表为 GT，{n_common} 轮可对齐。新一轮在**已知集合**上：",
+         f"TP {tt} · FP {tf} · FN {tn} → 精确率 **{_pct(p)}** · 召回率 **{_pct(rc)}** · F1 **{_pct(f)}**",
+         f"另有 **{sum(NEW.values())}** 条新命中落在人没核过的位置，需要下一轮复核才知道对错。", "",
+         f"- 上一轮人标的漏判，这轮判出来了：**{len(recovered)}** 条",
+         f"- 上一轮人认可的命中，这轮丢了：**{len(lost)}** 条",
+         f"- 上一轮的纯过判，这轮不判了：**{len(fixed_fp)}** 条；还在判的：**{len(kept_fp)}** 条", "",
+         "| 判据 | TP | FP | FN | 待核新命中 | 精确率 | 召回率 |", "|---|---:|---:|---:|---:|---:|---:|"]
+    for th in THEMES:
+        for t in th.tips:
+            c = t.code
+            if not (TP[c] or FP[c] or FN[c] or NEW[c]):
+                continue
+            p1, r1, _ = _prf(TP[c], FP[c], FN[c])
+            L.append(f"| `{c}` {t.name} | {TP[c]} | {FP[c]} | {FN[c]} | {NEW[c]} | {_pct(p1)} | {_pct(r1)} |")
+    if recovered:
+        L += ["", "补回的漏判：" + "、".join(f"{a}·{b}" for a, b in recovered[:30])]
+    if lost:
+        L += ["", "丢掉的命中：" + "、".join(f"{a}·{b}" for a, b in lost[:30])]
+    if kept_fp:
+        L += ["", "仍在判的过判：" + "、".join(f"{a}·{b}" for a, b in kept_fp)]
+    return L
+
+
+def main(review_xlsx: Path, out: Path | None = None, truth_out: Path | None = None,
+         judge: Path | None = None) -> int:
     review_xlsx = Path(review_xlsx)
     rows = read(review_xlsx)
     if not rows:
@@ -268,6 +331,10 @@ def main(review_xlsx: Path, out: Path | None = None, truth_out: Path | None = No
     m = metrics(rows)
     dest = Path(out) if out else review_xlsx.with_suffix(".agreement.md")
     write_report(rows, m, dest, review_xlsx.name)
+    if judge:
+        extra = against_judge(rows, Path(judge))
+        dest.write_text(dest.read_text(encoding="utf-8") + "\n".join(extra) + "\n", encoding="utf-8")
+        print("\n".join(extra[1:6]))
     TP, FP, FN = m["TP"], m["FP"], m["FN"]
     p, r, f = _prf(sum(TP.values()), sum(FP.values()), sum(FN.values()))
     print(f"OK {dest}\n   {len(rows)} 轮 · 命中 {sum(TP.values()) + sum(FP.values())} · "
