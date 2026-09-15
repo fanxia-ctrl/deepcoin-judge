@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<style>
+:root{
+  --hard:#d43b2c; --hard-bg:#fdecea; --sev:#2b63c6; --sev-bg:#e8effc; --norm:#1f8f4e; --norm-bg:#e6f5ec;
+  --tier:#c96a12; --tier-bg:#fdf0e3; --ink:#1e2430; --mute:#5b6473; --line:#d9dee7;
+  --t1:#2f6fd6; --t2:#1f9d55; --t3:#7a4fd6; --t4:#e0821b; --t5:#1c9fb5; --pos:#2f6fd6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;font-family:"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);font-size:13px;width:1280px}
+#wrap{position:relative;width:1280px;padding:16px 14px 18px 14px}
+svg#links{position:absolute;left:0;top:0;pointer-events:none}
+.grid{display:grid;grid-template-columns:150px 200px 1fr;column-gap:14px;row-gap:12px;align-items:start}
+.root{grid-row:1/ span 5;align-self:center;position:relative;height:100%}
+.rootnode{position:absolute;left:0;top:50%;transform:translateY(-50%);width:150px;height:150px;border-radius:50%;background:#fff;border:2px solid #cfd6e2;box-shadow:0 2px 10px rgba(30,40,60,.08);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.rootnode .big{font-size:20px;font-weight:700;letter-spacing:1px}
+.rootnode .mid{font-size:15px;font-weight:700;letter-spacing:2px}
+.rootnode .sm{font-size:12px;color:var(--mute)}
+.rootnode .ic{font-size:26px;line-height:1;margin-bottom:3px}
+.branch{position:absolute;left:0;width:150px;border:1.5px solid #bcd0f0;background:#eef4ff;border-radius:10px;padding:8px 9px;font-weight:700;font-size:13px;line-height:1.35;color:#1d3f7a}
+.branch small{display:block;font-weight:500;color:#3a5a90;font-size:11px}
+.branch.neg{top:8px}
+.branch.pos{bottom:8px}
+.theme{border:1.6px solid var(--c);border-radius:12px;background:#fff;padding:10px 12px;display:flex;gap:10px;align-items:center;min-height:100%}
+.theme .ic{width:36px;height:36px;border-radius:9px;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;flex:none}
+.theme .tt{font-weight:700;color:var(--c);font-size:14px}
+.theme .tn{font-weight:700;font-size:13.5px;line-height:1.35;margin-top:2px}
+.theme .needs{font-size:10.5px;color:var(--mute);margin-top:3px}
+.tips{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.tip{display:grid;grid-template-columns:64px 250px 1fr 132px;align-items:center;column-gap:10px;padding:5px 10px;border-bottom:1px solid var(--line);min-height:29px}
+.tip:last-child{border-bottom:none}
+.tip .code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#3d4756}
+.tip .name{font-weight:700;font-size:13px;color:var(--w)}
+.tip .desc{color:#333c4a;font-size:12.3px;line-height:1.35}
+.tip .desc em{font-style:normal;color:var(--mute)}
+.w{justify-self:end;border:1.4px solid var(--w);background:var(--wb);color:var(--w);border-radius:7px;padding:2px 9px;font-size:12px;font-weight:700;white-space:nowrap}
+.hard{--w:var(--hard);--wb:var(--hard-bg)} .sev{--w:var(--sev);--wb:var(--sev-bg)} .norm{--w:var(--norm);--wb:var(--norm-bg)} .tier{--w:var(--tier);--wb:var(--tier-bg)}
+/* 正向 */
+.posrow{grid-column:2/4;display:grid;grid-template-columns:repeat(5,1fr) 232px;gap:10px;margin-top:2px}
+.pc{border:1.4px solid #cfd8e8;border-radius:12px;padding:8px 10px;background:#fff}
+.pc .h{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;color:var(--c)}
+.pc .h .ic{width:24px;height:24px;border-radius:6px;background:var(--c);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px}
+.pc .h small{display:block;color:var(--mute);font-weight:500;font-size:10.5px}
+.pi{display:block;margin-top:7px;border:1px solid var(--line);border-radius:8px;padding:5px 7px}
+.pi .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.pi .k{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--mute)}
+.pi .d{font-size:11.5px;line-height:1.35;display:block}
+.pi .b{border:1.3px solid var(--norm);background:var(--norm-bg);color:var(--norm);border-radius:6px;padding:1px 6px;font-weight:700;font-size:11.5px;white-space:nowrap}
+.legend{border:1.4px solid #cfd8e8;border-radius:12px;padding:9px 11px;background:#fafbfe;font-size:11.5px;line-height:1.5}
+.legend b{display:block;font-size:13px;margin-bottom:3px}
+.legend .row{display:flex;align-items:center;gap:6px;margin:2px 0}
+.legend .w{justify-self:start;padding:1px 7px;font-size:11.5px}
+.legend .note{color:var(--mute);margin-top:4px;font-size:11.3px}
+</style></head><body>
+<div id="wrap">
+<svg id="links"></svg>
+<div class="grid">
+  <div class="root" id="root">
+    <div class="branch neg" id="bneg">负向 Final Rubric<small>（不合理项）命中即扣分</small></div>
+    <div class="rootnode" id="rootnode"><div class="ic">⚖️</div><div class="big">语音客服</div><div class="mid">RUBRIC</div><div class="sm">judge 判据图</div></div>
+    <div class="branch pos" id="bpos">正向 Final Rubric<small>（加分项）做对即加分</small></div>
+  </div>
+
+  <!-- T1 -->
+  <div class="theme t" style="--c:var(--t1)"><div class="ic">📌</div><div><div class="tt">Theme 1</div><div class="tn">事实与口径冲突</div><div class="needs">材料：问题 · 回答 · 证据 · 业务规则</div></div></div>
+  <div class="tips">
+    <div class="tip hard"><span class="code">neg_1_1</span><span class="name">与口径冲突</span><span class="desc">平台事实与口径相反（人工口径 › 本轮证据 › 业务规则）<em>　分类：入口存在性 / 规则结论 / 数值费率时限 / 账户事实</em></span><span class="w">hard_fail = 3.0</span></div>
+  </div>
+
+  <!-- T2 -->
+  <div class="theme t" style="--c:var(--t2)"><div class="ic">🎯</div><div><div class="tt">Theme 2</div><div class="tn">切题与完整性</div><div class="needs">材料：问题 · 回答</div></div></div>
+  <div class="tips">
+    <div class="tip sev"><span class="code">neg_2_1</span><span class="name">答的不是用户问的那件事</span><span class="desc">答了相邻话题或误读意图：问「为什么」答成开启步骤</span><span class="w">severe = 1.4</span></div>
+    <div class="tip sev"><span class="code">neg_2_2</span><span class="name">该给规则或公式却只给路径</span><span class="desc">问怎么算 / 什么规则 / 何时结算，只答在哪儿看<em>　前提：操作类或规则类问题</em></span><span class="w">severe = 1.4</span></div>
+    <div class="tip norm"><span class="code">neg_2_3</span><span class="name">只给结论不给原因</span><span class="desc">问「为什么」，只说「就是这样」「平台规则如此」</span><span class="w">normal = 0.6</span></div>
+    <div class="tip norm"><span class="code">neg_2_4</span><span class="name">笼统到不可执行</span><span class="desc">方向对但照着做不了：「建议检查设置」、路径给多个候选名<em>　前提：操作类或规则类问题</em></span><span class="w">normal = 0.6</span></div>
+    <div class="tip norm"><span class="code">neg_2_5</span><span class="name">问题有歧义却挑一种解读直接答</span><span class="desc">一句话多解或极短模糊，没先反问、也没只给最主干的一条<em>　前提：问题有歧义</em></span><span class="w">normal = 0.6</span></div>
+  </div>
+
+  <!-- T3 -->
+  <div class="theme t" style="--c:var(--t3)"><div class="ic">🔍</div><div><div class="tt">Theme 3</div><div class="tn">个人账户类问题缺取证</div><div class="needs">材料：问题 · 回答 · 机器信号</div></div></div>
+  <div class="tips">
+    <div class="tip sev"><span class="code">neg_3_1</span><span class="name">未取证即对用户个人情况下结论</span><span class="desc">没索要订单号 / 哈希、没请用户口述页面、本轮也无工具数据，就判因果或给账户事实<em>　前提：问题指向用户个人账户</em></span><span class="w">severe = 1.4</span></div>
+  </div>
+
+  <!-- T4 -->
+  <div class="theme t" style="--c:var(--t4)"><div class="ic">🛡️</div><div><div class="tt">Theme 4</div><div class="tn">角色与话术越界</div><div class="needs">材料：问题 · 回答</div></div></div>
+  <div class="tips">
+    <div class="tip sev"><span class="code">neg_4_1</span><span class="name">越权承诺或表态</span><span class="desc">替平台承诺赔付退款、判定责任、承诺代客操作或跟进、编造工单号</span><span class="w">severe = 1.4</span></div>
+    <div class="tip hard"><span class="code">neg_4_2</span><span class="name">违规或投资建议</span><span class="desc">建议用 VPN / 加速器；荐币、涨跌预测、投资建议</span><span class="w">hard_fail = 3.0</span></div>
+    <div class="tip sev"><span class="code">neg_4_3</span><span class="name">暴露内部或泄露</span><span class="desc">提到工具、接口、知识库、检索、工作流、prompt；被套话泄露规则；索要 UID 或泄露他人信息</span><span class="w">severe = 1.4</span></div>
+    <div class="tip norm"><span class="code">neg_4_4</span><span class="name">非业务话题实质作答或推销代替回答</span><span class="desc">闲聊噪音没一句话收住；问「怎么关」答成功能优势<em>　前提：非业务问题</em></span><span class="w">normal = 0.6</span></div>
+  </div>
+
+  <!-- T5 -->
+  <div class="theme t" style="--c:var(--t5)"><div class="ic">📎</div><div><div class="tt">Theme 5</div><div class="tn">证据使用</div><div class="needs">材料：问题 · 回答 · 证据 · 业务规则 · 机器信号</div></div></div>
+  <div class="tips">
+    <div class="tip tier"><span class="code">neg_5_1</span><span class="name">无据强答</span><span class="desc">平台断言在证据和业务规则里都找不到出处，或比出处更确定<em>　按分类定档：数值费率 / 账户事实 3.0 · 入口 / 规则 1.4 · 仅措辞过强 0.6</em></span><span class="w">按分类 0.6 – 3.0</span></div>
+    <div class="tip hard"><span class="code">neg_5_2</span><span class="name">零召回仍给确定答案</span><span class="desc">一条切片没召回或最高相似度 &lt; 0.45，仍给确定的路径或规则<em>　前提：证据不足</em></span><span class="w">hard_fail = 3.0</span></div>
+    <div class="tip sev"><span class="code">neg_5_3</span><span class="name">有据不答</span><span class="desc">证据里本有答案，却说「暂时处理不了」、推人工或套固定兜底（索赔投诉账户异常除外）</span><span class="w">severe = 1.4</span></div>
+  </div>
+
+  <!-- 正向 -->
+  <div class="posrow" id="posrow">
+    <div class="pc" style="--c:var(--t1)"><div class="h"><span class="ic">📌</span><span>Theme 1<small>拒编</small></span></div>
+      <div class="pi"><div class="top"><span class="k">neg_1_1</span><span class="b">+0.6</span></div><span class="d">口径说功能不存在或已下线时，直说没有、不给入口</span></div></div>
+    <div class="pc" style="--c:var(--t2)"><div class="h"><span class="ic">🎯</span><span>Theme 2<small>可执行 · 澄清</small></span></div>
+      <div class="pi"><div class="top"><span class="k">neg_2_2</span><span class="b">+0.6</span></div><span class="d">路径具体到按钮，规则给出公式与结算时点</span></div>
+      <div class="pi"><div class="top"><span class="k">neg_2_5</span><span class="b">+0.6</span></div><span class="d">有歧义时先反问一个明确的问题，或只给最主干一条</span></div></div>
+    <div class="pc" style="--c:var(--t3)"><div class="h"><span class="ic">🔍</span><span>Theme 3<small>取证</small></span></div>
+      <div class="pi"><div class="top"><span class="k">neg_3_1</span><span class="b">+0.5</span></div><span class="d">个人账户问题先索要订单号 / 哈希或请用户口述页面，再判断</span></div></div>
+    <div class="pc" style="--c:var(--t4)"><div class="h"><span class="ic">🛡️</span><span>Theme 4<small>收口</small></span></div>
+      <div class="pi"><div class="top"><span class="k">neg_4_4</span><span class="b">+0.3</span></div><span class="d">闲聊、噪音、无关话题一句话收住，detail 为空</span></div></div>
+    <div class="pc" style="--c:var(--t5)"><div class="h"><span class="ic">📎</span><span>Theme 5<small>兜底</small></span></div>
+      <div class="pi"><div class="top"><span class="k">neg_5_1 · neg_5_2</span><span class="b">+0.5</span></div><span class="d">证据不足时用固定兜底或明说无法确认，不强答</span></div></div>
+    <div class="legend"><b>评分说明</b>
+      <div class="row"><span class="w hard">hard_fail = 3.0</span>命中即不可上线</div>
+      <div class="row"><span class="w sev">severe = 1.4</span>严重不合理</div>
+      <div class="row"><span class="w norm">normal = 0.6</span>一般不合理</div>
+      <div class="note">扣分 = 各主题内取最大值再相加：&gt; 2.0 不可上线 · &gt; 0 需修改 · = 0 可直接发</div>
+      <div class="note">正向：前提成立且未命中才算做对；只用于排序，不抵扣负向</div>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+// 连线：根节点 → 各主题卡；分支标签 → 根节点
+(function(){
+  const wrap=document.getElementById('wrap'), svg=document.getElementById('links');
+  const W=wrap.offsetWidth, H=wrap.offsetHeight; svg.setAttribute('width',W); svg.setAttribute('height',H);
+  const rb=document.getElementById('rootnode').getBoundingClientRect(), wb=wrap.getBoundingClientRect();
+  const rx=rb.right-wb.left-4, ry=rb.top-wb.top+rb.height/2;
+  const cols={'Theme 1':'#2f6fd6','Theme 2':'#1f9d55','Theme 3':'#7a4fd6','Theme 4':'#e0821b','Theme 5':'#1c9fb5'};
+  let d='';
+  document.querySelectorAll('.theme.t').forEach(el=>{
+    const b=el.getBoundingClientRect(); const x=b.left-wb.left, y=b.top-wb.top+b.height/2;
+    const c=cols[el.querySelector('.tt').textContent.trim()];
+    const mx=(rx+x)/2;
+    d+=`<path d="M${rx},${ry} C${mx},${ry} ${mx},${y} ${x},${y}" fill="none" stroke="${c}" stroke-width="2.2"/>`;
+  });
+  ['bneg','bpos'].forEach(id=>{
+    const b=document.getElementById(id).getBoundingClientRect();
+    const x=b.left-wb.left+b.width/2, y=id==='bneg'?b.bottom-wb.top:b.top-wb.top;
+    const y2=id==='bneg'?rb.top-wb.top:rb.bottom-wb.top;
+    d+=`<path d="M${x},${y} L${x},${y2}" fill="none" stroke="#9fb3d6" stroke-width="2" stroke-dasharray="4 4"/>`;
+  });
+  // 正向分支 → 正向行
+  const pr=document.getElementById('posrow').getBoundingClientRect(), pb=document.getElementById('bpos').getBoundingClientRect();
+  d+=`<path d="M${pb.right-wb.left},${pb.top-wb.top+pb.height/2} L${pr.left-wb.left},${pb.top-wb.top+pb.height/2}" fill="none" stroke="#9fb3d6" stroke-width="2"/>`;
+  svg.innerHTML=d;
+})();
+</script>
+</body></html>
