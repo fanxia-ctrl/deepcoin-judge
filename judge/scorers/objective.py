@@ -30,6 +30,8 @@ THINKING_LEAK = re.compile(r"用户表达|客服(应|需|要)(共情|安抚)|本
                            r"思考过程|首先我需要")
 END_PUNCT = ("。", "！", "？", "…", ".", "!", "?", "」", "）", ")")
 ENVELOPE_KEYS = ("voice", "detail", "panel", "input_request")
+# 只有 voice 是必须出现的键：27B 契约写明 detail 默认为空，基线那张图干脆不输出空键
+ENVELOPE_REQUIRED = ("voice",)
 
 FALLBACK_HINTS = ("暂时无法确认", "这个问题我这边还不确定", "为您转接", "暂未收录")
 DETAIL_POINTER = re.compile(r"详情(见|在)|见下方|下方(有|为)|参见下面|具体见")
@@ -81,7 +83,7 @@ def check_contract(turn: dict, *, downstream: bool = False) -> list[Hit]:
     else:
         try:
             obj = json.loads(raw) if raw.strip().startswith("{") else {}
-            miss = [k for k in ENVELOPE_KEYS if k not in obj]
+            miss = [k for k in ENVELOPE_REQUIRED if k not in obj]
             if miss:
                 reasons.append("缺键 " + "、".join(miss))
         except json.JSONDecodeError as exc:

@@ -10,6 +10,40 @@ from rubric import RATIOS, TIP_BY_CODE
 from scorers import objective
 
 
+def evalset_section(rows: list[dict], turns: list[dict]) -> list[str]:
+    """data/evalset 那套评测集才有：按 A/B/D 分组看门禁，A/D 算 gold 切片召回，B 看编造。"""
+    groups = sorted({r.get("group") for r in rows if r.get("group")})
+    if not groups:
+        return []
+    T = {t.get("case_id"): t for t in turns}
+    L = ["", "## 评测集（按组）", "",
+         "A 正常作答 · B 知识库无覆盖应兜底 · D 口语与错别字（同 A）。", "",
+         "| 组 | 判了 | 可直接发 | 需修改 | 不可上线 | 不完整 | 编造/无据* | gold 切片召回** |",
+         "|---|---:|---:|---:|---:|---:|---:|---:|"]
+    FAB = {"neg_1_1", "neg_5_1", "neg_5_2"}
+    for g in groups:
+        rs = [r for r in rows if r.get("group") == g]
+        vc = Counter(r["verdict"] for r in rs)
+        fab = sum(1 for r in rs if set(r.get("neg_hits") or []) & FAB)
+        with_gold = [T[r["case_id"]] for r in rs if r["case_id"] in T and T[r["case_id"]].get("gold_segment_ids")]
+        got = sum(1 for t in with_gold
+                  if set(t["gold_segment_ids"]) & {h.get("segment_id") for h in (t.get("kb_hits") or [])})
+        recall = f"{got}/{len(with_gold)}（{got / len(with_gold):.0%}）" if with_gold else "—"
+        L.append(f"| {g} | {len(rs)} | {vc.get('可直接发', 0)} | {vc.get('需修改', 0)} | "
+                 f"{vc.get('不可上线', 0)} | {vc.get('判定不完整', 0)} | {fab} | {recall} |")
+    L += ["", "\* 命中 neg_1_1 / neg_5_1 / neg_5_2 任一。B 组这一列就是编造率 —— 知识库里没有还给了确定答案。",
+          "\*\* gold_segment_ids 有没有出现在本轮 kb_hits 里（任一命中即算）。D 组和 A 组同题，"
+          "差值就是口语/错别字对检索的影响。", ""]
+    B = [r for r in rows if r.get("group") == "B" and set(r.get("neg_hits") or []) & FAB]
+    if B:
+        L += ["B 组被判编造/无据的：", ""]
+        for r in B:
+            L.append(f"- **{r['case_id']}** `{'、'.join(sorted(set(r['neg_hits']) & FAB))}`　"
+                     f"{r.get('query', '')[:40]} → {(r.get('answer') or '')[:80].replace(chr(10), ' ')}")
+        L.append("")
+    return L
+
+
 def write(rows: list[dict], turns: list[dict], out: Path, meta: dict) -> None:
     n = len(rows) or 1
     L = ["# judge 结果", "",
@@ -68,6 +102,8 @@ def write(rows: list[dict], turns: list[dict], out: Path, meta: dict) -> None:
             L.append(f"  - 说不行：{'、'.join(c['say_no'])}")
     else:
         L.append("没有检出。")
+
+    L += evalset_section(rows, turns)
 
     over = sum(len(r.get("overclaimed") or []) for r in rows)
     errs = [e for r in rows for e in r.get("judge_errors", [])]
