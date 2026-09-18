@@ -13,21 +13,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.datavalidation import DataValidation
-
 from rubric import THEMES, THEME_BY_TIP, TIP_BY_CODE
 
 FONT = "Arial"
 MAX_HIT_COLS = 6
 
-JUDGE_FILL = PatternFill("solid", fgColor="EEF3FA")   # 机器判的，只读
-MARK_FILL = PatternFill("solid", fgColor="FFF7CC")    # 要人填的
-HEAD_FILL = PatternFill("solid", fgColor="2A4B7C")
-THIN = Side(style="thin", color="BFBFBF")
-BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+JUDGE_BG, MARK_BG, HEAD_BG = "EEF3FA", "FFF7CC", "2A4B7C"   # 机器判的 / 要人填的 / 表头
 
 OPT_RIGHT = ["对", "错", "拿不准"]
 OPT_MISS = ["无", "有", "拿不准"]
@@ -45,6 +36,18 @@ def _hit_cell(v: dict) -> str:
 
 
 def build(rows: list[dict], out: Path) -> Path:
+    # 在函数里导入：judge 本身零依赖，只有导表这一步要 openpyxl
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    JUDGE_FILL = PatternFill("solid", fgColor=JUDGE_BG)
+    MARK_FILL = PatternFill("solid", fgColor=MARK_BG)
+    HEAD_FILL = PatternFill("solid", fgColor=HEAD_BG)
+    THIN = Side(style="thin", color="BFBFBF")
+    BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+
     hit_lists = []
     for r in rows:
         vs = [v for v in (r.get("verdicts") or []) if v.get("hit") is True]

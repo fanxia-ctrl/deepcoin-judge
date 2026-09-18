@@ -81,8 +81,12 @@ def cmd_run(a) -> int:
                  {"source": Path(a.run).name, "llm": client.name, "group": a.group,
                   "elapsed": time.perf_counter() - t0})
     print(f"\nOK {out_dir / 'judge.jsonl'}\nOK {out_dir / 'report.md'}")
-    sheet.build(rows, out_dir / "复核表.xlsx")
-    print(f"OK {out_dir / '复核表.xlsx'}　← 发给标注的就是这张")
+    try:
+        sheet.build(rows, out_dir / "复核表.xlsx")
+        print(f"OK {out_dir / '复核表.xlsx'}　← 发给标注的就是这张")
+    except ImportError:
+        print("！ 没装 openpyxl，复核表没导出（判定结果已经写好了）。"
+              "\n   pip3 install openpyxl 之后：python3 cli.py sheet " + str(out_dir))
     print(f"   调用 {sum(r.get('llm_calls', 0) for r in rows)} 次（缓存命中 {cache.hits}）"
           f"　token 入 {sum(r.get('prompt_tokens', 0) for r in rows):,}"
           f" 出 {sum(r.get('completion_tokens', 0) for r in rows):,}")
