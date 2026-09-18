@@ -56,10 +56,11 @@ def _opener():
     IP 也代理掉、回 502。JUDGE_NO_PROXY=0 可以关掉这个绕行。
     """
     global _NO_PROXY_OPENER
-    if os.environ.get("JUDGE_NO_PROXY", "1") == "0":
-        return urllib.request
     if _NO_PROXY_OPENER is None:
-        _NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        # 注意 OpenerDirector 的方法叫 open()，不是 urlopen()
+        _NO_PROXY_OPENER = (urllib.request.build_opener()
+                            if os.environ.get("JUDGE_NO_PROXY", "1") == "0"
+                            else urllib.request.build_opener(urllib.request.ProxyHandler({})))
     return _NO_PROXY_OPENER
 
 
@@ -71,7 +72,7 @@ def _post(url: str, headers: dict, payload: dict, timeout: int) -> dict:
     last = ""
     for attempt in range(3):
         try:
-            with _opener().urlopen(req, timeout=timeout) as r:
+            with _opener().open(req, timeout=timeout) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             last = f"HTTP {e.code} {e.read().decode('utf-8', 'ignore')[:300]}"
