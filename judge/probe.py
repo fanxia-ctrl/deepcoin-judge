@@ -83,8 +83,7 @@ def run() -> int:
                      {"reasoning": {"enabled": False}}):
             client.extra = cand
             ok2, _, u2, ms2 = call(f"    {json.dumps(cand, ensure_ascii=False)}")
-            if ok2 and not getattr(u2, "reasoning_chars", 0) \
-                    and u2.completion_tokens < usage.completion_tokens * 0.7:
+            if ok2 and not getattr(u2, "reasoning_chars", 0):
                 print(f"\n  → 有效。写进 config.env：\n"
                       f"     JUDGE_EXTRA_BODY={json.dumps(cand, ensure_ascii=False)}")
                 _summary(ms2, u2)
