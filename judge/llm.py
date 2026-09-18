@@ -46,6 +46,23 @@ class LLMClient:
         raise NotImplementedError
 
 
+_NO_PROXY_OPENER = None
+
+
+def _opener():
+    """judge 端点是内网裸 IP，不该走代理。
+
+    macOS 上 urllib 会读系统代理设置（curl 不读），bench 那套 ngrok 代理会把这个
+    IP 也代理掉、回 502。JUDGE_NO_PROXY=0 可以关掉这个绕行。
+    """
+    global _NO_PROXY_OPENER
+    if os.environ.get("JUDGE_NO_PROXY", "1") == "0":
+        return urllib.request
+    if _NO_PROXY_OPENER is None:
+        _NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return _NO_PROXY_OPENER
+
+
 def _post(url: str, headers: dict, payload: dict, timeout: int) -> dict:
     """POST JSON，重试 429/5xx。线程安全：每次调用自己建连接。"""
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -54,10 +71,12 @@ def _post(url: str, headers: dict, payload: dict, timeout: int) -> dict:
     last = ""
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with _opener().urlopen(req, timeout=timeout) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             last = f"HTTP {e.code} {e.read().decode('utf-8', 'ignore')[:300]}"
+            if e.code in (502, 503, 504) and os.environ.get("JUDGE_NO_PROXY", "1") == "0":
+                last += "（若 curl 能通而这里不通，多半是系统代理：删掉 config.env 里的 JUDGE_NO_PROXY=0）"
             if e.code in (429, 500, 502, 503, 504) and attempt < 2:
                 time.sleep(2 * (attempt + 1))
                 continue

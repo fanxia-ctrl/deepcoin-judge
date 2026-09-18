@@ -7,6 +7,8 @@ judge 是独立的一套东西：它不关心被测 agent 长什么样，只吃�
 
 凭证在 `config.env`，待判数据在 `data/in/`，都随仓库走 —— clone 下来直接跑。
 
+> judge 调用默认绕开系统代理（`JUDGE_NO_PROXY=1`）—— 端点是内网裸 IP，macOS 上 urllib 会读系统代理设置把它代理成 502。真需要走代理时设成 0。
+
 ## 一分钟上手
 
 ```bash
