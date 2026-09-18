@@ -151,10 +151,14 @@ class OpenAICompatClient(LLMClient):
         msg = ch.get("message") or {}
         txt = msg.get("content") or ""
         u = obj.get("usage") or {}
+        # vLLM 把思考 token 数放在 usage.completion_tokens_details.reasoning_tokens；
+        # 有的端点把思考原文放在 message.reasoning_content / reasoning。两处都看。
+        rt = int(((u.get("completion_tokens_details") or {}).get("reasoning_tokens")) or 0)
+        rc = len(str(msg.get("reasoning_content") or msg.get("reasoning") or ""))
         return str(txt), Usage(int(u.get("prompt_tokens") or 0),
                                int(u.get("completion_tokens") or 0),
                                str(ch.get("finish_reason") or ""),
-                               len(str(msg.get("reasoning_content") or msg.get("reasoning") or "")))
+                               rc or rt)
 
 
 class MockClient(LLMClient):
