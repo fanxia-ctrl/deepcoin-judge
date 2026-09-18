@@ -3,6 +3,7 @@
 """deepcoin-judge 命令行。
 
     python3 cli.py probe                            一次真调用，验端点与 JSON mode
+    python3 cli.py ingest  <bench跑批目录> --name X   把 turns.jsonl 收进 data/in/X/
     python3 cli.py check   <run>                    预检，不发请求
     python3 cli.py run     <run> [--llm auto]       判一遍
     python3 cli.py sheet   <run|judge.jsonl>        导出人工复核 xlsx
@@ -91,6 +92,23 @@ def cmd_run(a) -> int:
     return 0
 
 
+def cmd_ingest(a) -> int:
+    import shutil
+    src = Path(a.run_dir).resolve()
+    if not (src / "turns.jsonl").exists():
+        print(f"{src} 里没有 turns.jsonl —— 先在 voice_agent_v3 里跑 python3 bench/extract_run.py <run>")
+        return 1
+    dst = ROOT / "data/in" / a.name
+    dst.mkdir(parents=True, exist_ok=True)
+    for n in ("turns.jsonl", "manifest.json"):
+        if (src / n).exists():
+            shutil.copy2(src / n, dst / n)
+    n = sum(1 for l in (dst / "turns.jsonl").read_text(encoding="utf-8").splitlines() if l.strip())
+    print(f"OK {dst}/turns.jsonl  {n} 轮\n   git add data/in && git commit && git push，服务器上 pull 后："
+          f"\n   python3 cli.py run data/in/{a.name}")
+    return 0
+
+
 def cmd_check(a) -> int:
     load_config()
     import preflight
@@ -160,6 +178,11 @@ def main() -> int:
                    help="传入的是 gateway 之后的文本，此时才查 TTS 标记（R4）")
     p.add_argument("-o", "--out", type=Path, default=None)
     p.set_defaults(fn=cmd_run)
+
+    p = sub.add_parser("ingest")
+    p.add_argument("run_dir", type=Path, help="voice_agent_v3/bench/runs/<run_id>（或 runs/latest）")
+    p.add_argument("--name", required=True, help="data/in/ 下的目录名，如 evalset-v1-base")
+    p.set_defaults(fn=cmd_ingest)
 
     p = sub.add_parser("check"); add_run_args(p); p.set_defaults(fn=cmd_check)
 

@@ -312,12 +312,55 @@ def against_judge(rows: list[dict], judge_jsonl: Path) -> list[str]:
                 continue
             p1, r1, _ = _prf(TP[c], FP[c], FN[c])
             L.append(f"| `{c}` {t.name} | {TP[c]} | {FP[c]} | {FN[c]} | {NEW[c]} | {_pct(p1)} | {_pct(r1)} |")
+    # 完整性三条（2_2 / 2_3 / 2_4）人和机器经常写成不同代码，合成一组再看一次
+    GROUP = {"neg_2_2", "neg_2_3", "neg_2_4"}
+    g_tp = g_fp = g_fn = 0
+    for r in rows:
+        j = J.get(r["case_id"])
+        if j is None:
+            continue
+        hn = set(j.get("neg_hits") or []) & GROUP
+        pos = ({h["code"] for h in r["hits"] if h["mark"] == "对"} | set(r["missed"])) & GROUP
+        neg = ({h["code"] for h in r["hits"] if h["mark"] == "错"} - pos) & GROUP
+        if hn and pos:
+            g_tp += 1
+        elif hn and neg and not pos:
+            g_fp += 1
+        elif pos and not hn:
+            g_fn += 1
+    gp, gr, gf = _prf(g_tp, g_fp, g_fn)
+    L += ["", f"完整性组（neg_2_2 + neg_2_3 + neg_2_4 视为同一条，按轮算）："
+          f"TP {g_tp} · FP {g_fp} · FN {g_fn} → 精确率 {_pct(gp)} · 召回率 {_pct(gr)} · F1 {_pct(gf)}"]
     if recovered:
         L += ["", "补回的漏判：" + "、".join(f"{a}·{b}" for a, b in recovered[:30])]
     if lost:
         L += ["", "丢掉的命中：" + "、".join(f"{a}·{b}" for a, b in lost[:30])]
     if kept_fp:
         L += ["", "仍在判的过判：" + "、".join(f"{a}·{b}" for a, b in kept_fp)]
+
+    # 增量复核表：只放人没核过的新命中 —— 下一轮只核这些，不用重核 94 轮
+    unknown: dict[str, set] = defaultdict(set)
+    for r in rows:
+        j = J.get(r["case_id"])
+        if j is None:
+            continue
+        known = {h["code"] for h in r["hits"]} | set(r["missed"])
+        for c in set(j.get("neg_hits") or []) - known:
+            unknown[r["case_id"]].add(c)
+    if unknown:
+        import copy
+        import sheet
+        delta = []
+        for cid, codes in unknown.items():
+            j = copy.deepcopy(J[cid])
+            j["verdicts"] = [v for v in j.get("verdicts") or [] if v.get("hit") and v["code"] in codes]
+            j["neg_hits"] = sorted(codes)
+            delta.append(j)
+        delta.sort(key=lambda r: (r.get("suite") or "", r["case_id"]))
+        out = Path(judge_jsonl).parent / "增量复核表.xlsx"
+        sheet.build(delta, out)
+        L += ["", f"待核的 {sum(len(v) for v in unknown.values())} 条新命中已导出 `{out}`"
+              f"（{len(delta)} 轮），只核这张，不用重核全量。"]
     return L
 
 

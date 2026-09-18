@@ -14,6 +14,8 @@ FIELDS = ("case_id", "suite", "query", "voice", "detail", "raw_answer", "envelop
           "kb_hits", "kb_count", "kb_top_score", "route_case",
           # 模型实际看到的证据与工具返回（extract_run 新字段；老数据没有就是 None）
           "evidence_text", "route_rules", "tool_calls",
+          # 评测集字段（data/evalset），judge 不用，进复核表
+          "group", "expect", "gold_intent", "gold_segment_ids",
           "tool_node_titles", "tool_names", "elapsed_ms", "http_status", "error")
 
 

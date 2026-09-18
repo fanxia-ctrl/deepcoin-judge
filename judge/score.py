@@ -51,6 +51,11 @@ def score(verdicts: list[dict], rule_hits: list | None = None,
             tv = str(v.get(tip.type_field) or "") if tip.type_field else ""
             hit_weight[tip.code] = tip.weight_for(tv)
 
+    # 事实说错了（neg_1_1）的断言，同时判无据（neg_5_1/5_2）是同一个观察，只记 T1
+    if "neg_1_1" in hit_weight:
+        for c in ("neg_5_1", "neg_5_2"):
+            hit_weight.pop(c, None)
+
     # 主题内取最大值，止住同源双计
     by_theme: dict[str, float] = defaultdict(float)
     for code, w in hit_weight.items():

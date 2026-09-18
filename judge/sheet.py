@@ -57,7 +57,7 @@ def build(rows: list[dict], out: Path) -> Path:
     ws = wb.active
     ws.title = "标注"
 
-    head = ["case_id", "suite", "route_case", "问题", "回答", "模型看到的证据", "工具调用",
+    head = ["case_id", "suite", "route_case", "期望", "问题", "回答", "模型看到的证据", "工具调用",
             "机器门禁", "扣分", "命中数", "规则命中"]
     for i in range(1, n_hit + 1):
         head += [f"命中{i}", f"命中{i} 判对吗"]
@@ -67,6 +67,7 @@ def build(rows: list[dict], out: Path) -> Path:
     for r, vs in zip(rows, hit_lists):
         ev = str(r.get("evidence") or "")
         line = [r.get("case_id", ""), r.get("suite", ""), r.get("route_case", ""),
+                (f"{r.get('expect')}" + (f" · {r.get('gold_intent')}" if r.get("gold_intent") else "")).strip(" ·"),
                 r.get("query", ""), r.get("answer") or r.get("voice") or "",
                 ev[:1500] + ("…" if len(ev) > 1500 else ""),
                 "\n".join(f"{c.get('name','')}{'（空）' if c.get('empty') else ''}"
@@ -79,7 +80,7 @@ def build(rows: list[dict], out: Path) -> Path:
         ws.append(line)
 
     n_rows = len(rows) + 1
-    first_hit = 12
+    first_hit = 13
     miss_col = first_hit + n_hit * 2
 
     for c in range(1, len(head) + 1):
@@ -100,14 +101,14 @@ def build(rows: list[dict], out: Path) -> Path:
             cell.fill = MARK_FILL if cell.column in mark_cols else JUDGE_FILL
         ws.row_dimensions[row[0].row].height = 96
 
-    widths = {1: 14, 2: 14, 3: 12, 4: 30, 5: 46, 6: 46, 7: 22, 8: 11, 9: 7, 10: 7, 11: 12}
+    widths = {1: 14, 2: 14, 3: 12, 4: 14, 5: 30, 6: 46, 7: 46, 8: 22, 9: 11, 10: 7, 11: 7, 12: 12}
     for i in range(n_hit):
         widths[first_hit + i * 2] = 42
         widths[first_hit + i * 2 + 1] = 11
     widths.update({miss_col: 10, miss_col + 1: 22, miss_col + 2: 26, miss_col + 3: 20})
     for c, w in widths.items():
         ws.column_dimensions[get_column_letter(c)].width = w
-    ws.freeze_panes = "E2"
+    ws.freeze_panes = "F2"
 
     # 选项放独立表引用：内联列表有 255 字符上限，长了会被静默丢掉
     opt = wb.create_sheet("_选项")
