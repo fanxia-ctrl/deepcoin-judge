@@ -46,6 +46,18 @@ class LLMClient:
         raise NotImplementedError
 
 
+THINK_END = re.compile(r"^.*</think\s*>", re.S)
+
+
+def strip_think(txt: str) -> tuple[str, int]:
+    """关了思考的 glm-5.3 仍会把思考写进 content，用 </think> 收尾。
+    返回 (正文, 被剥掉的思考字数)。"""
+    m = THINK_END.match(txt or "")
+    if not m:
+        return txt, 0
+    return txt[m.end():].lstrip(), m.end()
+
+
 _NO_PROXY_OPENER = None
 
 
@@ -122,7 +134,7 @@ class DifyClient(LLMClient):
         obj = _post(self.url, {"Authorization": f"Bearer {self.key}"},
                     payload, self.timeout)
         u = (obj.get("metadata") or {}).get("usage") or {}
-        return str(obj.get("answer") or ""), Usage(
+        return strip_think(str(obj.get("answer") or ""))[0], Usage(
             int(u.get("prompt_tokens") or 0), int(u.get("completion_tokens") or 0))
 
 
@@ -175,10 +187,11 @@ class OpenAICompatClient(LLMClient):
         # 有的端点把思考原文放在 message.reasoning_content / reasoning。两处都看。
         rt = int(((u.get("completion_tokens_details") or {}).get("reasoning_tokens")) or 0)
         rc = len(str(msg.get("reasoning_content") or msg.get("reasoning") or ""))
-        return str(txt), Usage(int(u.get("prompt_tokens") or 0),
-                               int(u.get("completion_tokens") or 0),
-                               str(ch.get("finish_reason") or ""),
-                               rc or rt)
+        body, leaked = strip_think(str(txt))
+        return body, Usage(int(u.get("prompt_tokens") or 0),
+                           int(u.get("completion_tokens") or 0),
+                           str(ch.get("finish_reason") or ""),
+                           rc or leaked or rt)
 
 
 class MockClient(LLMClient):

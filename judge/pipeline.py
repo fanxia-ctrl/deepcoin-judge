@@ -78,6 +78,8 @@ def parse_verdicts(raw: str, codes: list[str]) -> tuple[list[dict], str]:
     整体 JSON 坏了（多半是被 max_tokens 截断）就逐个对象救，能救几条算几条 ——
     err 里写明「截断，救回 n/m」，调用方决定重试还是接受。"""
     txt = (raw or "").strip()
+    if "</think" in txt:                      # 思考漏进正文时只取最后一个 </think> 之后
+        txt = re.sub(r"^.*</think\s*>", "", txt, flags=re.S).strip()
     if txt.startswith("```"):
         txt = re.sub(r"^```[a-z]*\n|\n```$", "", txt)
     out, seen = [], set()
