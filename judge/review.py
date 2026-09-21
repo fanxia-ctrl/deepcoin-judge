@@ -17,6 +17,10 @@ from pathlib import Path
 
 from rubric import THEMES, THEME_BY_TIP, TIP_BY_CODE
 
+# v2.1 把 neg_2_2/2_3/2_4 合成了 neg_2_2。老 run 和老复核表里的旧代码在评估时归一，
+# 否则「换条」会被当成 FP+FN 各记一次。
+ALIAS = {"neg_2_3": "neg_2_2", "neg_2_4": "neg_2_2"}
+
 OK = {"是", "对", "✅", "√", "y", "yes", "1"}
 BAD = {"否", "错", "❌", "×", "x", "n", "no", "0"}
 CODE = re.compile(r"neg_\d_\d")
@@ -57,13 +61,13 @@ def read(xlsx: Path) -> list[dict]:
             cell = g(f"命中{i}")
             if not cell:
                 continue
-            code = str(cell).split()[0]
+            code = ALIAS.get(str(cell).split()[0], str(cell).split()[0])
             if code not in TIP_BY_CODE:
                 continue
             hits.append({"code": code, "mark": _norm(g(f"命中{i} 判对吗")),
                          "raw": str(g(f"命中{i} 判对吗") or ""), "text": str(cell)})
         free = " ".join(str(x) for x in (g("有漏判吗"), g("漏了哪条"), g("漏判说明"), g("备注")) if x)
-        missed = sorted(set(CODE.findall(free)) & set(TIP_BY_CODE))
+        missed = sorted({ALIAS.get(c, c) for c in CODE.findall(free)} & set(TIP_BY_CODE))
         # 只写了名字没写代码的
         if not missed:
             for t in TIP_BY_CODE.values():
@@ -277,7 +281,7 @@ def against_judge(rows: list[dict], judge_jsonl: Path) -> list[str]:
         if j is None:
             continue
         n_common += 1
-        hits_new = set(j.get("neg_hits") or [])
+        hits_new = {ALIAS.get(c, c) for c in (j.get("neg_hits") or [])}
         pos = {h["code"] for h in r["hits"] if h["mark"] == "对"} | set(r["missed"])
         neg = {h["code"] for h in r["hits"] if h["mark"] == "错"} - pos
         for c in hits_new:
@@ -316,25 +320,6 @@ def against_judge(rows: list[dict], judge_jsonl: Path) -> list[str]:
                 continue
             p1, r1, _ = _prf(TP[c], FP[c], FN[c])
             L.append(f"| `{c}` {t.name} | {TP[c]} | {FP[c]} | {FN[c]} | {NEW[c]} | {_pct(p1)} | {_pct(r1)} |")
-    # 完整性三条（2_2 / 2_3 / 2_4）人和机器经常写成不同代码，合成一组再看一次
-    GROUP = {"neg_2_2", "neg_2_3", "neg_2_4"}
-    g_tp = g_fp = g_fn = 0
-    for r in rows:
-        j = J.get(r["case_id"])
-        if j is None:
-            continue
-        hn = set(j.get("neg_hits") or []) & GROUP
-        pos = ({h["code"] for h in r["hits"] if h["mark"] == "对"} | set(r["missed"])) & GROUP
-        neg = ({h["code"] for h in r["hits"] if h["mark"] == "错"} - pos) & GROUP
-        if hn and pos:
-            g_tp += 1
-        elif hn and neg and not pos:
-            g_fp += 1
-        elif pos and not hn:
-            g_fn += 1
-    gp, gr, gf = _prf(g_tp, g_fp, g_fn)
-    L += ["", f"完整性组（neg_2_2 + neg_2_3 + neg_2_4 视为同一条，按轮算）："
-          f"TP {g_tp} · FP {g_fp} · FN {g_fn} → 精确率 {_pct(gp)} · 召回率 {_pct(gr)} · F1 {_pct(gf)}"]
     if recovered:
         L += ["", "补回的漏判：" + "、".join(f"{a}·{b}" for a, b in recovered[:30])]
     if lost:
