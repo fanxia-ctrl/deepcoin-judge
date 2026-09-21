@@ -16,7 +16,7 @@
 | `neg_1_1` | 与口径冲突 | 5 | 3 | 2 | 16 | 60% | 16% | 25% |
 | `neg_2_1` | 答的不是用户问的那件事 | 6 | 6 | 0 | 5 | 100% | 55% | 71% |
 | `neg_2_2` | 该给规则或公式却只给路径 | 1 | 1 | 0 | 16 | 100% | 6% | 11% |
-| `neg_2_3` | 只给结论不带规则 | 6 | 6 | 0 | 3 | 100% | 67% | 80% |
+| `neg_2_3` | 只给结论不给原因 | 6 | 6 | 0 | 3 | 100% | 67% | 80% |
 | `neg_2_4` | 笼统到不可执行 | 25 | 24 | 1 | 9 | 96% | 73% | 83% |
 | `neg_2_5` | 问题有歧义却挑一种解读直接答 | 8 | 8 | 0 | 1 | 100% | 89% | 94% |
 | `neg_3_1` | 未取证即对用户个人情况下结论 | 12 | 12 | 0 | 2 | 100% | 86% | 92% |
@@ -207,7 +207,7 @@ neg_2_2        T2 切题与完整性
 
 常规版：在事件合约交易页面，点击左上方钱包图标，选择转入填写金额确认即可；Pro版：在事件合约交易页面【可用资金】处点击【+】
 
-### `neg_2_3` 只给结论不带规则 × 3
+### `neg_2_3` 只给结论不给原因 × 3
 
 - **online:case_03_rebate:020**（机器 需修改，已命中 neg_5_3）：没有帮助用户解决具体的问题，没有告知用户最新的返佣规则。
 - **online:case_03_rebate:021**（机器 需修改，已命中 neg_2_1）：用户咨询的是如何关闭返佣自动划转的功能，AI回复错误。
@@ -234,28 +234,32 @@ neg_2_2        T2 切题与完整性
 ## 对照新一轮 judge · `shane-fx-0908/judge.jsonl`
 
 以这张复核表为 GT，94 轮可对齐。新一轮在**已知集合**上：
-TP 116 · FP 15 · FN 54 → 精确率 **89%** · 召回率 **68%** · F1 **77%**
-另有 **0** 条新命中落在人没核过的位置，需要下一轮复核才知道对错。
+TP 97 · FP 28 · FN 73 → 精确率 **78%** · 召回率 **57%** · F1 **66%**
+FP 里 **13** 条是人明确判过「错」的，**15** 条是人没提到的（复核表按封闭世界读：没提到即不该命中）。
 
 - 上一轮人标的漏判，这轮判出来了：**0** 条
-- 上一轮人认可的命中，这轮丢了：**0** 条
-- 上一轮的纯过判，这轮不判了：**0** 条；还在判的：**15** 条
+- 上一轮人认可的命中，这轮丢了：**19** 条
+- 上一轮的纯过判，这轮不判了：**2** 条；还在判的：**13** 条
 
-| 判据 | TP | FP | FN | 待核新命中 | 精确率 | 召回率 |
+| 判据 | TP | FP | FN | 其中人没提到 | 精确率 | 召回率 |
 |---|---:|---:|---:|---:|---:|---:|
 | `neg_1_1` 与口径冲突 | 3 | 2 | 16 | 0 | 60% | 16% |
-| `neg_2_1` 答的不是用户问的那件事 | 6 | 0 | 5 | 0 | 100% | 55% |
-| `neg_2_2` 该给规则或公式却只给路径 | 1 | 0 | 16 | 0 | 100% | 6% |
-| `neg_2_3` 只给结论不带规则 | 6 | 0 | 3 | 0 | 100% | 67% |
-| `neg_2_4` 笼统到不可执行 | 24 | 1 | 9 | 0 | 96% | 73% |
-| `neg_2_5` 问题有歧义却挑一种解读直接答 | 8 | 0 | 1 | 0 | 100% | 89% |
-| `neg_3_1` 未取证即对用户个人情况下结论 | 12 | 0 | 2 | 0 | 100% | 86% |
-| `neg_4_1` 越权承诺或表态 | 1 | 0 | 0 | 0 | 100% | 100% |
+| `neg_2_1` 答的不是用户问的那件事 | 5 | 3 | 6 | 3 | 62% | 45% |
+| `neg_2_2` 该给规则或公式却只给路径 | 0 | 3 | 17 | 3 | 0% | 0% |
+| `neg_2_3` 只给结论不给原因 | 4 | 2 | 5 | 2 | 67% | 44% |
+| `neg_2_4` 笼统到不可执行 | 18 | 1 | 15 | 1 | 95% | 55% |
+| `neg_2_5` 问题有歧义却挑一种解读直接答 | 6 | 0 | 3 | 0 | 100% | 67% |
+| `neg_3_1` 未取证即对用户个人情况下结论 | 11 | 2 | 3 | 2 | 85% | 79% |
+| `neg_4_1` 越权承诺或表态 | 0 | 0 | 1 | 0 | — | 0% |
 | `neg_4_3` 暴露内部或泄露 | 1 | 0 | 0 | 0 | 100% | 100% |
-| `neg_5_1` 无据强答 | 43 | 11 | 1 | 0 | 80% | 98% |
-| `neg_5_2` 零召回仍给确定答案 | 10 | 1 | 1 | 0 | 91% | 91% |
-| `neg_5_3` 有据不答 | 1 | 0 | 0 | 0 | 100% | 100% |
+| `neg_5_1` 无据强答 | 39 | 11 | 5 | 1 | 78% | 89% |
+| `neg_5_2` 零召回仍给确定答案 | 9 | 2 | 2 | 1 | 82% | 82% |
+| `neg_5_3` 有据不答 | 1 | 2 | 0 | 2 | 33% | 100% |
 
-完整性组（neg_2_2 + neg_2_3 + neg_2_4 视为同一条，按轮算）：TP 29 · FP 1 · FN 15 → 精确率 97% · 召回率 66% · F1 78%
+完整性组（neg_2_2 + neg_2_3 + neg_2_4 视为同一条，按轮算）：TP 24 · FP 0 · FN 20 → 精确率 100% · 召回率 55% · F1 71%
 
-仍在判的过判：mock:M01·neg_5_1、online:case_03_rebate:006·neg_5_1、online:case_03_rebate:009·neg_5_1、online:case_03_rebate:015·neg_5_1、online:case_03_rebate:015·neg_1_1、online:case_10_trade_orders:066·neg_1_1、online:case_12_copytrade:056·neg_5_1、mock:M02·neg_5_1、mock:M10·neg_5_1、mock:M13·neg_2_4、mock:M18·neg_5_1、online:case_13_trade_general:026·neg_5_1、online:case_13_trade_general:031·neg_5_1、mock:M03·neg_5_1、mock:M03·neg_5_2
+丢掉的命中：mock:M11·neg_4_1、mock:M12·neg_5_1、online:case_03_rebate:009·neg_2_2、online:case_03_rebate:016·neg_2_5、online:case_03_rebate:025·neg_2_4、online:case_03_rebate:025·neg_2_3、online:case_10_trade_orders:066·neg_5_1、online:case_10_trade_orders:068·neg_2_1、online:case_10_trade_orders:071·neg_2_4、mock:M15·neg_5_1、online:case_12_copytrade:044·neg_3_1、online:case_12_copytrade:044·neg_5_1、online:case_12_copytrade:044·neg_2_4、online:case_12_copytrade:045·neg_2_4、mock:M10·neg_2_5、online:case_13_trade_general:030·neg_2_3、online:case_13_trade_general:037·neg_5_2、online:case_13_trade_general:063·neg_2_4、online:case_18_event_contract:047·neg_2_4
+
+人判过「错」还在判的：mock:M01·neg_5_1、online:case_03_rebate:006·neg_5_1、online:case_03_rebate:009·neg_5_1、online:case_03_rebate:015·neg_5_1、online:case_03_rebate:015·neg_1_1、online:case_10_trade_orders:066·neg_1_1、mock:M02·neg_5_1、mock:M10·neg_5_1、mock:M18·neg_5_1、online:case_13_trade_general:026·neg_5_1、online:case_13_trade_general:031·neg_5_1、mock:M03·neg_5_1、mock:M03·neg_5_2
+
+人没提到却判了的 15 条：online:case_02_general_support:076·neg_3_1、mock:M07·neg_5_1、online:case_03_rebate:009·neg_5_2、online:case_03_rebate:016·neg_2_1、online:case_03_rebate:021·neg_5_3、online:case_03_rebate:021·neg_2_4、online:case_10_trade_orders:068·neg_2_3、online:case_10_trade_orders:073·neg_3_1、online:case_12_copytrade:042·neg_5_3、online:case_12_copytrade:042·neg_2_2、mock:M13·neg_2_1、online:case_13_trade_general:030·neg_2_2、online:case_13_trade_general:065·neg_2_1、online:case_17_funds:061·neg_2_3、online:case_18_event_contract:047·neg_2_2

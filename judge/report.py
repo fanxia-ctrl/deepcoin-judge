@@ -50,6 +50,10 @@ def write(rows: list[dict], turns: list[dict], out: Path, meta: dict) -> None:
          f"来源 `{meta['source']}` · 模型 `{meta['llm']}` · 分组 `{meta['group']}` · "
          f"{len(rows)} 轮 · {meta['elapsed']:.0f}s · "
          f"LLM 调用 {sum(r.get('llm_calls', 0) for r in rows)} 次", ""]
+    fps = meta.get("fingerprints") or []
+    if fps:
+        L += [f"端点指纹 `{'`、`'.join(fps)}`　—— 跨 run 比指标前先确认这行一样，"
+              f"服务端换模型/换部署会让同一套 rubric 判出不同结果。", ""]
     if meta["llm"] == "mock":
         L += ["> **mock 的判定没有意义**，这份报告只用来确认链路通。", ""]
 

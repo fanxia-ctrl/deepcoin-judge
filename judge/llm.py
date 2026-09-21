@@ -27,6 +27,10 @@ import urllib.request
 from dataclasses import dataclass
 
 
+# 端点指纹：服务端换模型/换部署时这个会变，跨 run 比指标前先看它一样不一样
+SEEN_FINGERPRINTS: set[str] = set()
+
+
 @dataclass
 class Usage:
     prompt_tokens: int = 0
@@ -187,6 +191,9 @@ class OpenAICompatClient(LLMClient):
         # 有的端点把思考原文放在 message.reasoning_content / reasoning。两处都看。
         rt = int(((u.get("completion_tokens_details") or {}).get("reasoning_tokens")) or 0)
         rc = len(str(msg.get("reasoning_content") or msg.get("reasoning") or ""))
+        fp = str(obj.get("system_fingerprint") or "")
+        if fp:
+            SEEN_FINGERPRINTS.add(f"{obj.get('model') or self.model}@{fp}")
         body, leaked = strip_think(str(txt))
         return body, Usage(int(u.get("prompt_tokens") or 0),
                            int(u.get("completion_tokens") or 0),

@@ -79,7 +79,8 @@ def cmd_run(a) -> int:
         "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
     report.write(rows, turns, out_dir / "report.md",
                  {"source": Path(a.run).name, "llm": client.name, "group": a.group,
-                  "elapsed": time.perf_counter() - t0})
+                  "elapsed": time.perf_counter() - t0,
+                  "fingerprints": sorted(llm.SEEN_FINGERPRINTS)})
     print(f"\nOK {out_dir / 'judge.jsonl'}\nOK {out_dir / 'report.md'}")
     try:
         sheet.build(rows, out_dir / "复核表.xlsx")
