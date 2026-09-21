@@ -261,15 +261,16 @@ def merge_truth(cands: list[dict], truth_path: Path) -> tuple[int, int]:
 
 def against_judge(rows: list[dict], judge_jsonl: Path) -> list[str]:
     """拿人核过的这张表当 GT，对照新一轮 judge 输出。
-    人核给出的已知集合：H+ = 判「对」的命中 ∪ 标的漏判；H- = 判「错」的命中（换条也算：那条确实不该命中）。
-    新一轮命中落在 H+ 是 TP，落在 H- 是 FP，H+ 里没命中的是 FN；两边都不在的是「新命中，待核」。"""
+    复核表按封闭世界读：人逐条核过所有命中、并补全了漏判，**没提到的就是不该命中**。
+    H+ = 判「对」的命中 ∪ 标的漏判。新一轮命中在 H+ 是 TP，不在就是 FP（无论人当时
+    是判了「错」还是根本没提）；H+ 里没命中的是 FN。不再有「待核」这一类。"""
     J = {}
     for l in Path(judge_jsonl).read_text(encoding="utf-8").splitlines():
         if l.strip():
             o = json.loads(l)
             J[o["case_id"]] = o
     TP, FP, FN, NEW = Counter(), Counter(), Counter(), Counter()
-    kept_fp, fixed_fp, recovered, lost = [], [], [], []
+    kept_fp, fixed_fp, recovered, lost, new_fp = [], [], [], [], []
     n_common = 0
     for r in rows:
         j = J.get(r["case_id"])
@@ -286,7 +287,9 @@ def against_judge(rows: list[dict], judge_jsonl: Path) -> list[str]:
                 FP[c] += 1
                 kept_fp.append((r["case_id"], c))
             else:
+                FP[c] += 1          # 人没提到 = 不该命中
                 NEW[c] += 1
+                new_fp.append((r["case_id"], c))
         for c in pos - hits_new:
             FN[c] += 1
             if c in {h["code"] for h in r["hits"]}:
@@ -300,11 +303,12 @@ def against_judge(rows: list[dict], judge_jsonl: Path) -> list[str]:
     L = ["", f"## 对照新一轮 judge · `{Path(judge_jsonl).parent.name}/{Path(judge_jsonl).name}`", "",
          f"以这张复核表为 GT，{n_common} 轮可对齐。新一轮在**已知集合**上：",
          f"TP {tt} · FP {tf} · FN {tn} → 精确率 **{_pct(p)}** · 召回率 **{_pct(rc)}** · F1 **{_pct(f)}**",
-         f"另有 **{sum(NEW.values())}** 条新命中落在人没核过的位置，需要下一轮复核才知道对错。", "",
+         f"FP 里 **{len(kept_fp)}** 条是人明确判过「错」的，**{sum(NEW.values())}** 条是人没提到的"
+         f"（复核表按封闭世界读：没提到即不该命中）。", "",
          f"- 上一轮人标的漏判，这轮判出来了：**{len(recovered)}** 条",
          f"- 上一轮人认可的命中，这轮丢了：**{len(lost)}** 条",
          f"- 上一轮的纯过判，这轮不判了：**{len(fixed_fp)}** 条；还在判的：**{len(kept_fp)}** 条", "",
-         "| 判据 | TP | FP | FN | 待核新命中 | 精确率 | 召回率 |", "|---|---:|---:|---:|---:|---:|---:|"]
+         "| 判据 | TP | FP | FN | 其中人没提到 | 精确率 | 召回率 |", "|---|---:|---:|---:|---:|---:|---:|"]
     for th in THEMES:
         for t in th.tips:
             c = t.code
@@ -336,31 +340,10 @@ def against_judge(rows: list[dict], judge_jsonl: Path) -> list[str]:
     if lost:
         L += ["", "丢掉的命中：" + "、".join(f"{a}·{b}" for a, b in lost[:30])]
     if kept_fp:
-        L += ["", "仍在判的过判：" + "、".join(f"{a}·{b}" for a, b in kept_fp)]
+        L += ["", "人判过「错」还在判的：" + "、".join(f"{a}·{b}" for a, b in kept_fp)]
+    if new_fp:
+        L += ["", f"人没提到却判了的 {len(new_fp)} 条：" + "、".join(f"{a}·{b}" for a, b in new_fp)]
 
-    # 增量复核表：只放人没核过的新命中 —— 下一轮只核这些，不用重核 94 轮
-    unknown: dict[str, set] = defaultdict(set)
-    for r in rows:
-        j = J.get(r["case_id"])
-        if j is None:
-            continue
-        known = {h["code"] for h in r["hits"]} | set(r["missed"])
-        for c in set(j.get("neg_hits") or []) - known:
-            unknown[r["case_id"]].add(c)
-    if unknown:
-        import copy
-        import sheet
-        delta = []
-        for cid, codes in unknown.items():
-            j = copy.deepcopy(J[cid])
-            j["verdicts"] = [v for v in j.get("verdicts") or [] if v.get("hit") and v["code"] in codes]
-            j["neg_hits"] = sorted(codes)
-            delta.append(j)
-        delta.sort(key=lambda r: (r.get("suite") or "", r["case_id"]))
-        out = Path(judge_jsonl).parent / "增量复核表.xlsx"
-        sheet.build(delta, out)
-        L += ["", f"待核的 {sum(len(v) for v in unknown.values())} 条新命中已导出 `{out}`"
-              f"（{len(delta)} 轮），只核这张，不用重核全量。"]
     return L
 
 

@@ -258,4 +258,4 @@ TP 116 · FP 15 · FN 54 → 精确率 **89%** · 召回率 **68%** · F1 **77%*
 
 完整性组（neg_2_2 + neg_2_3 + neg_2_4 视为同一条，按轮算）：TP 29 · FP 1 · FN 15 → 精确率 97% · 召回率 66% · F1 78%
 
-仍在判的过判：mock:M01·neg_5_1、online:case_03_rebate:006·neg_5_1、online:case_03_rebate:009·neg_5_1、online:case_03_rebate:015·neg_1_1、online:case_03_rebate:015·neg_5_1、online:case_10_trade_orders:066·neg_1_1、online:case_12_copytrade:056·neg_5_1、mock:M02·neg_5_1、mock:M10·neg_5_1、mock:M13·neg_2_4、mock:M18·neg_5_1、online:case_13_trade_general:026·neg_5_1、online:case_13_trade_general:031·neg_5_1、mock:M03·neg_5_2、mock:M03·neg_5_1
+仍在判的过判：mock:M01·neg_5_1、online:case_03_rebate:006·neg_5_1、online:case_03_rebate:009·neg_5_1、online:case_03_rebate:015·neg_5_1、online:case_03_rebate:015·neg_1_1、online:case_10_trade_orders:066·neg_1_1、online:case_12_copytrade:056·neg_5_1、mock:M02·neg_5_1、mock:M10·neg_5_1、mock:M13·neg_2_4、mock:M18·neg_5_1、online:case_13_trade_general:026·neg_5_1、online:case_13_trade_general:031·neg_5_1、mock:M03·neg_5_1、mock:M03·neg_5_2
