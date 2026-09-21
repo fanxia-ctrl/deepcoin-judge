@@ -74,11 +74,14 @@ def cmd_run(a) -> int:
     rows, cache = pipeline.run(
         turns, client, truth, grps, workers=a.workers,
         cache_path=None if a.no_cache else out_dir / "cache.jsonl",
-        retries=a.retries, evidence_chars=a.evidence_chars, downstream=a.downstream)
+        retries=a.retries, evidence_chars=a.evidence_chars, downstream=a.downstream,
+        samples=a.samples, vote_k=a.vote_k, temperature=a.temp)
     (out_dir / "judge.jsonl").write_text(
         "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
     report.write(rows, turns, out_dir / "report.md",
                  {"source": Path(a.run).name, "llm": client.name, "group": a.group,
+                  "samples": a.samples, "vote_k": a.vote_k or (a.samples // 2 + 1),
+                  "temp": a.temp,
                   "elapsed": time.perf_counter() - t0,
                   "fingerprints": sorted(llm.SEEN_FINGERPRINTS)})
     print(f"\nOK {out_dir / 'judge.jsonl'}\nOK {out_dir / 'report.md'}")
@@ -123,7 +126,7 @@ def cmd_check(a) -> int:
 
 def cmd_sheet(a) -> int:
     import sheet
-    return sheet.main(a.judge, a.out)
+    return sheet.main(a.judge, a.out, a.vs)
 
 
 def cmd_review(a) -> int:
@@ -181,6 +184,13 @@ def main() -> int:
     p.add_argument("--no-cache", action="store_true")
     p.add_argument("--downstream", action="store_true",
                    help="传入的是 gateway 之后的文本，此时才查 TTS 标记（R4）")
+    p.add_argument("--samples", type=int, default=1,
+                   help="同一组判据判几遍做多数表决。同配置重跑本来就有抖动，"
+                        "表决把抖动换成稳定性，代价是成倍的调用")
+    p.add_argument("--vote-k", dest="vote_k", type=int, default=0,
+                   help="命中票数达到几票才算命中，默认过半")
+    p.add_argument("--temp", type=float, default=0.0,
+                   help="采样温度。>0 给 --samples 更多样性，单次判定用 0")
     p.add_argument("-o", "--out", type=Path, default=None)
     p.set_defaults(fn=cmd_run)
 
@@ -194,6 +204,9 @@ def main() -> int:
     p = sub.add_parser("sheet")
     p.add_argument("judge", type=Path, help="judge 输出目录或 judge.jsonl")
     p.add_argument("-o", "--out", type=Path, default=None)
+    p.add_argument("--vs", type=Path, default=None,
+                   help="已核过的复核表。给了就只导**这张表没裁过**的命中 —— "
+                        "封闭世界口径下，没被问到的命中一律算 FP，补核这批才能打开精确率天花板")
     p.set_defaults(fn=cmd_sheet)
 
     p = sub.add_parser("review")

@@ -127,6 +127,38 @@ def parse_verdicts(raw: str, codes: list[str]) -> tuple[list[dict], str]:
     return out, ""
 
 
+def vote(samples: list[list[dict]], codes: list[str], k: int) -> list[dict]:
+    """同一组判据判了多遍，逐条多数表决。
+
+    同配置重跑同一轮，命中集合本来就不完全一样 —— 端点是批处理的 vLLM，温度 0 也不
+    保证逐 token 可复现。把这份抖动收进表决里：命中票数 >= k 才算命中，引用与理由取
+    投了命中的第一份，分类字段取命中样本里的众数。samples 只有一份时原样返回。
+    """
+    if len(samples) == 1:
+        return samples[0]
+    out = []
+    for c in codes:
+        vs = [v for s in samples for v in s if v["code"] == c]
+        if not vs:
+            continue
+        yes = [v for v in vs if v.get("hit") is True]
+        hit = len(yes) >= k
+        src = (yes[0] if hit and yes else
+               next((v for v in vs if v.get("hit") is False), vs[0]))
+        rec = dict(src)
+        rec["hit"] = hit if any(v.get("hit") is not None for v in vs) else None
+        rec["votes"] = f"{len(yes)}/{len(vs)}"
+        ap = [v.get("applies") for v in vs if v.get("applies") is not None]
+        if ap:
+            rec["applies"] = sum(bool(a) for a in ap) * 2 > len(ap)
+        if not hit:
+            for f in list(rec):
+                if f.endswith("_type"):
+                    rec.pop(f)
+        out.append(rec)
+    return out
+
+
 def verify_quotes(verdicts: list[dict], answer: str) -> list[str]:
     """quote 引不出原文的命中一律当过判，翻回 false。最便宜的降过判手段。"""
     flat = re.sub(r"\s+", "", answer)
@@ -143,7 +175,8 @@ def verify_quotes(verdicts: list[dict], answer: str) -> list[str]:
 
 
 def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
-               grps, cache: Cache, retries: int = 1, downstream: bool = False) -> dict:
+               grps, cache: Cache, retries: int = 1, downstream: bool = False,
+               samples: int = 1, vote_k: int = 0, temperature: float = 0.0) -> dict:
     cid = str(turn.get("case_id") or "")
     ctx = build_ctx(turn, truth, evidence_chars)
     missing = missing_materials(ctx)
@@ -169,38 +202,47 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
         codes = [t.code for th in grp for t in th.tips]
         system, user = prompts.build(grp, ctx)
         gk, glabel = group_key(grp), group_label(grp)
-        k = Cache.key(cid, gk, system, user)
-        raw, vs, err = cache.get(k), [], "缓存里没有"
-        best: tuple[list[dict], str] = ([], "")
-        for attempt in range(retries + 1):
-            if raw is None:
-                try:
-                    raw, usage = client.complete(
-                        system, user + (retry_hint(err) if attempt else ""))
-                    calls += 1
-                    pt += getattr(usage, "prompt_tokens", 0) or 0
-                    ct += getattr(usage, "completion_tokens", 0) or 0
-                    fr = getattr(usage, "finish_reason", "")
-                    rc = getattr(usage, "reasoning_chars", 0)
-                    if fr == "length" or rc:
-                        thinking_notes.append(f"finish={fr or '?'} 思考{rc}字")
-                except NotImplementedError as exc:
-                    return {"case_id": cid, "fatal": str(exc)}
-                except Exception as exc:
-                    err, raw = f"调用失败：{type(exc).__name__}: {exc}", None
-                    continue
-            vs, err = parse_verdicts(raw, codes)
-            if not err:
-                cache.put(k, raw)
-                break
-            if len(vs) > len(best[0]):
-                best = (vs, err)
-            if raw is not None and cache.path is not None:
-                fdir = cache.path.parent / "failed"
-                fdir.mkdir(exist_ok=True)
-                (fdir / f"{cid.replace(':', '_')}.{attempt}.txt").write_text(
-                    f"# {err}\n\n{raw}", encoding="utf-8")
-            raw = None
+        got: list[list[dict]] = []
+        for si in range(max(1, samples)):
+            k = Cache.key(cid, f"{gk}#{si}" if si else gk, system, user)
+            raw, vs, err = cache.get(k), [], "缓存里没有"
+            best: tuple[list[dict], str] = ([], "")
+            for attempt in range(retries + 1):
+                if raw is None:
+                    try:
+                        raw, usage = client.complete(
+                            system, user + (retry_hint(err) if attempt else ""),
+                            temperature=temperature)
+                        calls += 1
+                        pt += getattr(usage, "prompt_tokens", 0) or 0
+                        ct += getattr(usage, "completion_tokens", 0) or 0
+                        fr = getattr(usage, "finish_reason", "")
+                        rc = getattr(usage, "reasoning_chars", 0)
+                        if fr == "length" or rc:
+                            thinking_notes.append(f"finish={fr or '?'} 思考{rc}字")
+                    except NotImplementedError as exc:
+                        return {"case_id": cid, "fatal": str(exc)}
+                    except Exception as exc:
+                        err, raw = f"调用失败：{type(exc).__name__}: {exc}", None
+                        continue
+                vs, err = parse_verdicts(raw, codes)
+                if not err:
+                    cache.put(k, raw)
+                    break
+                if len(vs) > len(best[0]):
+                    best = (vs, err)
+                if raw is not None and cache.path is not None:
+                    fdir = cache.path.parent / "failed"
+                    fdir.mkdir(exist_ok=True)
+                    (fdir / f"{cid.replace(':', '_')}.{si}.{attempt}.txt").write_text(
+                        f"# {err}\n\n{raw}", encoding="utf-8")
+                raw = None
+            if vs:
+                got.append(vs)
+        if got:
+            # 表决前先各自补齐：某一份漏了的判据在那一份里记 null，不影响别份的票
+            vs = vote(got, codes, vote_k or (len(got) // 2 + 1))
+            err = "" if len(vs) == len(codes) else err
         if err and best[0]:
             # 重试后还是不齐：接受救回来的，缺的标 null。一条判据没判不该让整轮作废。
             vs, err = best
@@ -263,12 +305,14 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
 
 
 def run(turns, client, truth, grps, *, workers=4, cache_path=None, retries=1,
-        evidence_chars=4000, downstream=False, progress=print):
+        evidence_chars=4000, downstream=False, progress=print,
+        samples=1, vote_k=0, temperature=0.0):
     cache = Cache(cache_path)
     rows = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futs = {pool.submit(judge_turn, client, t, truth, evidence_chars, grps,
-                            cache, retries, downstream): t for t in turns}
+                            cache, retries, downstream, samples, vote_k,
+                            temperature): t for t in turns}
         for i, f in enumerate(as_completed(futs), 1):
             r = f.result()
             if r.get("fatal"):

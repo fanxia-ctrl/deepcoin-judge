@@ -48,8 +48,11 @@ def write(rows: list[dict], turns: list[dict], out: Path, meta: dict) -> None:
     n = len(rows) or 1
     L = ["# judge 结果", "",
          f"来源 `{meta['source']}` · 模型 `{meta['llm']}` · 分组 `{meta['group']}` · "
-         f"{len(rows)} 轮 · {meta['elapsed']:.0f}s · "
-         f"LLM 调用 {sum(r.get('llm_calls', 0) for r in rows)} 次", ""]
+         + (f"表决 {meta['vote_k']}/{meta['samples']} 票"
+            + (f"（温度 {meta['temp']}）" if meta.get("temp") else "") + " · "
+            if meta.get("samples", 1) > 1 else "")
+         + f"{len(rows)} 轮 · {meta['elapsed']:.0f}s · "
+           f"LLM 调用 {sum(r.get('llm_calls', 0) for r in rows)} 次", ""]
     fps = meta.get("fingerprints") or []
     if fps:
         L += [f"端点指纹 `{'`、`'.join(fps)}`　—— 跨 run 比指标前先确认这行一样，"

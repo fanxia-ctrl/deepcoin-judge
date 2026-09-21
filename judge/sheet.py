@@ -186,7 +186,31 @@ def build(rows: list[dict], out: Path) -> Path:
     return out
 
 
-def main(judge_jsonl: Path, out: Path | None = None) -> int:
+def only_new(rows: list[dict], reviewed_xlsx: Path) -> list[dict]:
+    """只留下**上一轮复核没裁过**的命中，用来出增量复核表。
+
+    复核表按封闭世界读：人没提到的命中一律算 FP。可人当时只看得见上一轮列出来的命中，
+    没被问到的判据他没机会说「这条该命中」—— 召回每涨一点，精确率就被这条规则扣一点。
+    把新判出来、上一轮没裁过的那些单独导一张表送复核，这个天花板才打得开。
+    """
+    import review
+    judged: dict[str, set[str]] = {}
+    for r in review.read(Path(reviewed_xlsx)):
+        judged[r["case_id"]] = ({h["code"] for h in r["hits"] if h["mark"] in ("对", "错")}
+                                | set(r["missed"]))
+    out = []
+    for r in rows:
+        done = judged.get(str(r.get("case_id") or ""))
+        if done is None:                       # 这一轮是新 case，整条都没裁过
+            done = set()
+        keep = [v for v in (r.get("verdicts") or [])
+                if v.get("hit") is True and review.ALIAS.get(v["code"], v["code"]) not in done]
+        if keep:
+            out.append({**r, "verdicts": keep})
+    return out
+
+
+def main(judge_jsonl: Path, out: Path | None = None, vs: Path | None = None) -> int:
     p = Path(judge_jsonl)
     if p.is_dir():
         p = p / "judge.jsonl"
@@ -195,7 +219,16 @@ def main(judge_jsonl: Path, out: Path | None = None) -> int:
         return 1
     rows = [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines() if x.strip()]
     rows.sort(key=lambda r: (r.get("suite") or "", r.get("case_id") or ""))
-    dest = Path(out) if out else p.with_name("复核表.xlsx")
+    if vs:
+        n0 = len(rows)
+        rows = only_new(rows, Path(vs))
+        print(f"增量：{n0} 轮里有 {len(rows)} 轮出现了上一轮没裁过的命中，"
+              f"共 {sum(len(r['verdicts']) for r in rows)} 条")
+        if not rows:
+            print("没有新命中要核")
+            return 0
+    dest = Path(out) if out else p.with_name(
+        "增量复核表.xlsx" if vs else "复核表.xlsx")
     build(rows, dest)
     n_hit = sum(1 for r in rows for v in (r.get("verdicts") or []) if v.get("hit") is True)
     print(f"OK {dest}\n   {len(rows)} 个 case · {n_hit} 条命中待核 · "
