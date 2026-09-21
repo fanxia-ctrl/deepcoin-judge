@@ -51,14 +51,15 @@ def score(verdicts: list[dict], rule_hits: list | None = None,
             tv = str(v.get(tip.type_field) or "") if tip.type_field else ""
             hit_weight[tip.code] = tip.weight_for(tv)
 
-    # 事实说错了（neg_1_1）的断言，同时判无据（neg_5_1/5_2）是同一个观察，只记 T1
-    if "neg_1_1" in hit_weight:
-        for c in ("neg_5_1", "neg_5_2"):
-            hit_weight.pop(c, None)
+    # 事实说错了（neg_1_1）的断言，同时判无据（neg_5_1/5_2）是同一个观察，扣分只记 T1。
+    # 但 neg_hits 保留它们 —— 那是「judge 判了什么」，人机一致率量的是这个；
+    # 扣分是「门禁怎么算」，两码事，混在一起会让指标随计分策略漂移。
+    suppressed = [c for c in ("neg_5_1", "neg_5_2") if "neg_1_1" in hit_weight and c in hit_weight]
+    scored_weight = {c: w for c, w in hit_weight.items() if c not in suppressed}
 
     # 主题内取最大值，止住同源双计
     by_theme: dict[str, float] = defaultdict(float)
-    for code, w in hit_weight.items():
+    for code, w in scored_weight.items():
         th = THEME_BY_TIP[code].key
         by_theme[th] = max(by_theme[th], w)
 
@@ -69,7 +70,7 @@ def score(verdicts: list[dict], rule_hits: list | None = None,
         th = RULE_THEME.get(h.rule, f"rule:{h.rule}")
         by_theme[th] = max(by_theme[th], h.weight)
 
-    hard = [c for c, w in hit_weight.items() if w >= HARD_FAIL]
+    hard = [c for c, w in scored_weight.items() if w >= HARD_FAIL]
     hard += [h.rule for h in scored_rules if h.weight >= HARD_FAIL]
 
     deduct = round(sum(by_theme.values()), 3)
@@ -102,6 +103,7 @@ def score(verdicts: list[dict], rule_hits: list | None = None,
         "hard_fail": hard,
         "neg_hits": sorted(hit_weight),
         "neg_weights": {c: hit_weight[c] for c in sorted(hit_weight)},
+        "suppressed": suppressed,          # 判到了但因同源不重复扣分的
         "theme_deduct": {k: v for k, v in sorted(by_theme.items())},
         "pos_hits": pos_hits,
         "ratio_num": dict(ratio_num), "ratio_den": dict(ratio_den),
