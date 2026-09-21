@@ -8,3 +8,4 @@ __pycache__/
 *.pyc
 .DS_Store
 .venv/
+data/kb_corpus.index
