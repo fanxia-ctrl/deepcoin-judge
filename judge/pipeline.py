@@ -24,6 +24,14 @@ RETRY_HINT = ("\n\n上一次的回复不是合法 JSON 或漏了判据。只输�
               "不要代码块、不要解释，verdicts 覆盖每一条判据。")
 
 
+def retry_hint(err: str) -> str:
+    """漏判时把缺的 code 点名列出来 —— glm 系统性跳过描述最短的那条（neg_2_3）。"""
+    miss = re.findall(r"neg_\d_\d", err or "")
+    if miss:
+        return RETRY_HINT + "\n**上次漏了这几条，务必补上：** " + "、".join(dict.fromkeys(miss))
+    return RETRY_HINT
+
+
 class Cache:
     def __init__(self, path: Path | None):
         self.path, self.mem, self.hits = path, {}, 0
@@ -167,7 +175,8 @@ def judge_turn(client: LLMClient, turn: dict, truth: dict, evidence_chars: int,
         for attempt in range(retries + 1):
             if raw is None:
                 try:
-                    raw, usage = client.complete(system, user + (RETRY_HINT if attempt else ""))
+                    raw, usage = client.complete(
+                        system, user + (retry_hint(err) if attempt else ""))
                     calls += 1
                     pt += getattr(usage, "prompt_tokens", 0) or 0
                     ct += getattr(usage, "completion_tokens", 0) or 0
