@@ -23,13 +23,42 @@ import review as R                              # noqa: E402
 GT_XLSX = ROOT / "data/labels/复核-shane-fx-0908-产品.xlsx"
 
 
-def gt(xlsx=GT_XLSX):
-    """case_id → (正例集合, 人明确判错的集合)"""
+PATCH = ROOT / "data/labels/gt-补丁.jsonl"
+SKIP: set[tuple[str, str]] = set()          # 存疑的 (轮次, 判据)，两边都不计
+
+
+def gt(xlsx=GT_XLSX, patch: Path | None = PATCH):
+    """case_id → (正例集合, 人明确判错的集合, 原始行)
+
+    复核表只列出**生成它那一轮**命中的判据，人没机会对没列出的判据表态。
+    94 轮 × 14 条 = 1316 个格子，复核表里有人工意见的只有 207 个。
+    封闭世界把剩下 1100 多个格子一律当「不该命中」—— 那是假设，不是数据。
+
+    gt-补丁.jsonl 补的就是这些格子：每条都带依据（知识库原文，或人自己在
+    备注/漏判说明里写过、但没勾成判据的那句话）。标「存疑」的两边都不计。
+    传 patch=None 读原始封闭世界口径。
+    """
+    SKIP.clear()
     out = {}
     for r in R.read(Path(xlsx)):
         pos = {h["code"] for h in r["hits"] if h["mark"] == "对"} | set(r["missed"])
         neg = {h["code"] for h in r["hits"] if h["mark"] == "错"} - pos
         out[r["case_id"]] = (pos, neg, r)
+    if patch and Path(patch).exists():
+        for l in Path(patch).read_text(encoding="utf-8").splitlines():
+            if not l.strip():
+                continue
+            o = json.loads(l)
+            cid, c = o["case_id"], o["code"]
+            if cid not in out:
+                continue
+            pos, neg, row = out[cid]
+            if o["verdict"] == "正例":
+                out[cid] = (pos | {c}, neg - {c}, row)
+            elif o["verdict"] == "反例":
+                out[cid] = (pos - {c}, neg | {c}, row)
+            else:
+                SKIP.add((cid, c))
     return out
 
 
@@ -59,10 +88,14 @@ def score(path, G=None):
         if h is None:
             continue
         for c in h:
+            if (cid, c) in SKIP:
+                continue
             (TP if c in pos else FP)[c] += 1
             if c not in pos and c not in neg:
                 NEW[c] += 1
         for c in pos - h:
+            if (cid, c) in SKIP:
+                continue
             FN[c] += 1
         cases[cid] = {"tp": sorted(h & pos), "fp": sorted(h - pos), "fn": sorted(pos - h)}
     tt, tf, tn = sum(TP.values()), sum(FP.values()), sum(FN.values())

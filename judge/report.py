@@ -55,8 +55,10 @@ def write(rows: list[dict], turns: list[dict], out: Path, meta: dict) -> None:
            f"LLM 调用 {sum(r.get('llm_calls', 0) for r in rows)} 次", ""]
     fps = meta.get("fingerprints") or []
     if fps:
-        L += [f"端点指纹 `{'`、`'.join(fps)}`　—— 跨 run 比指标前先确认这行一样，"
-              f"服务端换模型/换部署会让同一套 rubric 判出不同结果。", ""]
+        L += [f"端点指纹 `{'`、`'.join(fps)}`　·　判据指纹 `{meta.get('rubric', '?')}`",
+              "",
+              "跨 run 比指标前先确认这两行一样：端点换模型/换部署，或判据文本改了，"
+              "判出来的结果就不是一回事。", ""]
     if meta["llm"] == "mock":
         L += ["> **mock 的判定没有意义**，这份报告只用来确认链路通。", ""]
 

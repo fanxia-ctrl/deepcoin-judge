@@ -57,7 +57,7 @@ def _load(a) -> tuple[list[dict], dict]:
 
 def cmd_run(a) -> int:
     load_config()
-    import llm, pipeline, report, sheet
+    import llm, pipeline, report, rubric, sheet
     from rubric import groups
     turns, truth = _load(a)
     from rubric import THEMES as themes
@@ -83,7 +83,8 @@ def cmd_run(a) -> int:
                   "samples": a.samples, "vote_k": a.vote_k or (a.samples // 2 + 1),
                   "temp": a.temp,
                   "elapsed": time.perf_counter() - t0,
-                  "fingerprints": sorted(llm.SEEN_FINGERPRINTS)})
+                  "fingerprints": sorted(llm.SEEN_FINGERPRINTS),
+                  "rubric": rubric.fingerprint()})
     print(f"\nOK {out_dir / 'judge.jsonl'}\nOK {out_dir / 'report.md'}")
     try:
         sheet.build(rows, out_dir / "复核表.xlsx")

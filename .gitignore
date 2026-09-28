@@ -9,3 +9,9 @@ __pycache__/
 .DS_Store
 .venv/
 data/kb_corpus.index
+
+# 判定失败时的模型原始输出（截断、思考烧光预算），排查用，不进库
+data/runs/*/failed/
+
+# 增量复核表：cli.py sheet --vs 随时能重导，是发给标注的中间件，不是 run 产物
+data/runs/*/增量复核表*.xlsx

@@ -60,7 +60,8 @@ def build(rows: list[dict], out: Path) -> Path:
     ws = wb.active
     ws.title = "标注"
 
-    head = ["case_id", "suite", "route_case", "期望", "问题", "回答", "模型看到的证据", "工具调用",
+    head = ["case_id", "suite", "route_case", "期望", "问题", "回答", "模型看到的证据",
+            "知识库复核（评估方另检，模型没看到）", "工具调用",
             "机器门禁", "扣分", "命中数", "规则命中"]
     for i in range(1, n_hit + 1):
         head += [f"命中{i}", f"命中{i} 判对吗"]
@@ -73,6 +74,7 @@ def build(rows: list[dict], out: Path) -> Path:
                 (f"{r.get('expect')}" + (f" · {r.get('gold_intent')}" if r.get("gold_intent") else "")).strip(" ·"),
                 r.get("query", ""), r.get("answer") or r.get("voice") or "",
                 ev[:1500] + ("…" if len(ev) > 1500 else ""),
+                str(r.get("kbcheck") or "")[:2000],
                 "\n".join(f"{c.get('name','')}{'（空）' if c.get('empty') else ''}"
                           for c in (r.get("tool_calls") or [])),
                 r.get("verdict", ""), r.get("deduct", 0), len(vs),
@@ -83,7 +85,7 @@ def build(rows: list[dict], out: Path) -> Path:
         ws.append(line)
 
     n_rows = len(rows) + 1
-    first_hit = 13
+    first_hit = 14
     miss_col = first_hit + n_hit * 2
 
     for c in range(1, len(head) + 1):
@@ -104,7 +106,8 @@ def build(rows: list[dict], out: Path) -> Path:
             cell.fill = MARK_FILL if cell.column in mark_cols else JUDGE_FILL
         ws.row_dimensions[row[0].row].height = 96
 
-    widths = {1: 14, 2: 14, 3: 12, 4: 14, 5: 30, 6: 46, 7: 46, 8: 22, 9: 11, 10: 7, 11: 7, 12: 12}
+    widths = {1: 14, 2: 14, 3: 12, 4: 14, 5: 30, 6: 46, 7: 46, 8: 46, 9: 22,
+              10: 11, 11: 7, 12: 7, 13: 12}
     for i in range(n_hit):
         widths[first_hit + i * 2] = 42
         widths[first_hit + i * 2 + 1] = 11
@@ -210,6 +213,30 @@ def only_new(rows: list[dict], reviewed_xlsx: Path) -> list[dict]:
     return out
 
 
+def fill_kbcheck(rows: list[dict]) -> None:
+    """给复核表补「知识库复核」列 —— 评估方另检，被测模型没看到过。
+
+    被测 agent 那一轮召回了什么，和知识库里到底写着什么，是两件事。
+    复核表只放前者，人就只能判「有没有依据」，判不出「说错了」——
+    `neg_1_1` 的漏判里，事实在知识库里逐字都有，只是没进那一轮的召回。
+    这里用问题+回答在全量语料上再检一次（零依赖 BM25，不打端点）当旁证。
+
+    语料/索引缺失时静默留空：复核表照出，只是少一列旁证。
+    """
+    try:
+        import kbcheck
+    except Exception:
+        return
+    if kbcheck.index() is None:
+        print("！ 没有 kb 语料，「知识库复核」列留空"
+              "（建语料：python3 tools/build_kb_corpus.py）")
+        return
+    for r in rows:
+        if not r.get("kbcheck"):
+            r["kbcheck"] = kbcheck.lookup(r.get("query", ""), r.get("answer") or r.get("voice") or "")
+    print(f"   已补「知识库复核」列 {sum(1 for r in rows if r.get('kbcheck'))}/{len(rows)} 轮")
+
+
 def main(judge_jsonl: Path, out: Path | None = None, vs: Path | None = None) -> int:
     p = Path(judge_jsonl)
     if p.is_dir():
@@ -227,6 +254,7 @@ def main(judge_jsonl: Path, out: Path | None = None, vs: Path | None = None) -> 
         if not rows:
             print("没有新命中要核")
             return 0
+    fill_kbcheck(rows)
     dest = Path(out) if out else p.with_name(
         "增量复核表.xlsx" if vs else "复核表.xlsx")
     build(rows, dest)

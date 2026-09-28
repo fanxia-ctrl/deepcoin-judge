@@ -225,6 +225,23 @@ THEME_BY_TIP = {t.code: th for th in THEMES for t in th.tips}
 CONDITIONAL_TIPS = tuple(t for t in TIP_BY_CODE.values() if t.conditional)
 RATIOS = tuple(dict.fromkeys(t.ratio for t in CONDITIONAL_TIPS if t.ratio))
 
+
+def fingerprint() -> str:
+    """判据文本指纹 —— 12 位 sha1，跟着 run 落盘。
+
+    端点指纹回答「服务端是不是同一个」，这条回答「判据是不是同一版」。
+    两条都记下来，隔几周回头看某个 run 的数才知道它是怎么来的：
+    v8 到 v14 那几轮就是因为没记，现在已经对不上各自用的哪版判据文本了。
+    只哈希真正进 prompt 的字段，权重和统计口径改了不算换版本。
+    """
+    import hashlib
+    blob = "\n".join(
+        "|".join(str(getattr(t, f) or "") for f in
+                 ("code", "desc", "applies_when", "right_looks_like", "type_options"))
+        for th in THEMES for t in th.tips)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]
+
+
 # 人工标注的「主要问题」单选 → v2 判据。用来算一致率。
 HUMAN_ISSUE_TO_TIPS: dict[str, tuple[str, ...]] = {
     "口径错": ("neg_1_1",),
