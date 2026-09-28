@@ -12,6 +12,7 @@
     python3 cli.py truth   <labels.xlsx>            抽权威口径
     python3 cli.py rubric                           打印判据表
     python3 cli.py selftest                         自检
+    python3 cli.py serve   [--port 8787]            起异步服务（接口见 docs/service.md）
 """
 from __future__ import annotations
 
@@ -162,6 +163,18 @@ def cmd_selftest(a) -> int:
     return selftest.main()
 
 
+def cmd_serve(a) -> int:
+    load_config()
+    import llm
+    from service.app import serve
+    try:
+        client = llm.get_client(a.llm)
+    except NotImplementedError as exc:
+        print(exc)
+        return 1
+    return serve(a.host, a.port, a.data, client, workers=a.workers)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="deepcoin-judge")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -233,6 +246,17 @@ def main() -> int:
     sub.add_parser("probe").set_defaults(fn=cmd_probe)
     sub.add_parser("rubric").set_defaults(fn=cmd_rubric)
     sub.add_parser("selftest").set_defaults(fn=cmd_selftest)
+
+    p = sub.add_parser("serve")
+    p.add_argument("--host", default="127.0.0.1",
+                   help="默认只听本机；对外提供服务用 0.0.0.0，并配好 JUDGE_SERVICE_KEYS")
+    p.add_argument("--port", type=int, default=8787)
+    p.add_argument("--workers", type=int, default=4,
+                   help="全局并发上限，所有任务共用。上游只有一台 vLLM，别开太大")
+    p.add_argument("--llm", default="auto", choices=("auto", "mock", "dify", "openai"))
+    p.add_argument("--data", type=Path, default=ROOT / "data/service",
+                   help="任务库、模型缓存、每个任务的产物都放这里")
+    p.set_defaults(fn=cmd_serve)
 
     a = ap.parse_args()
     return a.fn(a)

@@ -201,6 +201,14 @@ def main() -> int:
     ck("模型客户端已实现", True, "dify + openai 兼容")
     ck("凭证状态", True, f"已配好 {'、'.join(ready)}" if ready else "还没配 —— 填 config.env")
 
+    print("\n[服务]")
+    try:
+        from service import selftest as svc
+    except ImportError as exc:                 # 只拷了 judge/ 没拷 service/ 时照样能自检判定部分
+        ck("服务模块", True, f"跳过：{exc}")
+    else:
+        svc.run(ck)
+
     print()
     if FAILS:
         print(f"{len(FAILS)} 项 FAIL：{'、'.join(FAILS)}")

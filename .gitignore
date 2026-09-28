@@ -15,3 +15,9 @@ data/runs/*/failed/
 
 # 增量复核表：cli.py sheet --vs 随时能重导，是发给标注的中间件，不是 run 产物
 data/runs/*/增量复核表*.xlsx
+
+# 服务的运行数据：任务库、模型缓存、每个任务的产物
+data/service/
+
+# 服务调用方的 API key（serve.sh 首次启动时生成）
+service.keys

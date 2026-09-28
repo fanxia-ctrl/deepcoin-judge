@@ -16,7 +16,10 @@ pip3 install openpyxl                                  # 只导复核表用；�
 python3 cli.py selftest                                # 不发请求，验代码+凭证
 python3 cli.py probe                                   # 一次真调用，验端点和 JSON mode
 python3 cli.py run data/in/shane-fx-0908 --no-truth    # 判 94 轮，出 judge.jsonl / report.md / 复核表.xlsx
+bash serve.sh                                          # 起异步服务（后台、崩了自动拉起），别人 POST 一批轮次、轮询取结果
 ```
+
+服务的接口、输入字段、缺字段怎么降级、上游不稳时怎么办、在别的服务器上怎么部署，见 `docs/service.md`。
 
 结果在 `data/runs/shane-fx-0908/`，提交回仓库就能在别的机器上拉到。
 `复核表.xlsx` 是发给标注的那张：一行一 case，只列命中的判据，人标「判对了吗」和「有没有漏判」。
@@ -103,6 +106,7 @@ T1 的口径是人工口径优先、召回切片兜底，两样都没有才输�
 
 ```
 cli.py                 命令行入口
+serve.sh               服务启停：start / stop / restart / status / logs / attach / check
 judge/
   rubric.py            判据表，唯一真源
   prompts.py           按组拼 prompt（含 applies / 分类字段）
@@ -118,9 +122,16 @@ judge/
   preflight.py         预检
   selftest.py          自检
   scorers/objective.py 规则层 R1–R11
+service/               异步服务（标准库，判定逻辑全在 judge/，这里只管排队和接口）
+  app.py               HTTP 接口与鉴权
+  intake.py            入参校验、补默认值、归一成 Turn
+  runner.py            后台执行：串行取任务、按轮并行、熔断与续跑
+  store.py             SQLite 任务库
+  selftest.py          进程内起服务走一遍接口，cli.py selftest 会调
 data/in/<name>/        待判数据（turns.jsonl + manifest.json）
 data/labels/           上一批标注抽出的 truth.jsonl
 data/runs/<run>/       judge.jsonl · report.md · 复核表.xlsx · agreement.md · cache.jsonl
+data/service/          服务的任务库、模型缓存、每个任务的产物（不进库）
 ```
 
 ## 三件没做完的事
